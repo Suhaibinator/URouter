@@ -4,6 +4,8 @@ URouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Suhaibinator/URouter)](https://goreportcard.com/report/github.com/Suhaibinator/URouter)
 [![GoDoc](https://godoc.org/github.com/Suhaibinator/URouter?status.svg)](https://godoc.org/github.com/Suhaibinator/URouter)
+[![Tests](https://github.com/Suhaibinator/URouter/actions/workflows/tests.yml/badge.svg)](https://github.com/Suhaibinator/URouter/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/Suhaibinator/URouter/graph/badge.svg?token=NNIYO5HKX7)](https://codecov.io/gh/Suhaibinator/URouter)
 
 ## Features
 
