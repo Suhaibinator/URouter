@@ -26,7 +26,10 @@ func TestMetrics(t *testing.T) {
 		Path:    "/test",
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, World!"))
+			_, err := w.Write([]byte("Hello, World!"))
+			if err != nil {
+				t.Fatalf("Failed to write response: %v", err)
+			}
 		},
 	})
 
@@ -99,7 +102,10 @@ func TestTracing(t *testing.T) {
 		Path:    "/test",
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, World!"))
+			_, err := w.Write([]byte("Hello, World!"))
+			if err != nil {
+				t.Fatalf("Failed to write response: %v", err)
+			}
 		},
 	})
 
@@ -183,7 +189,10 @@ func TestMetricsResponseWriter(t *testing.T) {
 	}
 
 	// Write a response
-	mrw.Write([]byte("Hello, World!"))
+	_, err := mrw.Write([]byte("Hello, World!"))
+	if err != nil {
+		t.Fatalf("Failed to write response: %v", err)
+	}
 
 	// Check that the response was written
 	if rr.Body.String() != "Hello, World!" {

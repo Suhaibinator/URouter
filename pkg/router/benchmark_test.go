@@ -26,7 +26,7 @@ func BenchmarkRouterSimple(b *testing.B) {
 		Path:    "/hello",
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, World!"))
+			_, _ = w.Write([]byte("Hello, World!"))
 		},
 	})
 
@@ -65,7 +65,7 @@ func BenchmarkRouterWithParams(b *testing.B) {
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			id := GetParam(r, "id")
 			postId := GetParam(r, "postId")
-			w.Write([]byte(fmt.Sprintf("User ID: %s, Post ID: %s", id, postId)))
+			_, _ = w.Write([]byte(fmt.Sprintf("User ID: %s, Post ID: %s", id, postId)))
 		},
 	})
 
@@ -118,7 +118,7 @@ func BenchmarkRouterWithMiddleware(b *testing.B) {
 			addHeaderMiddleware("X-Route", "true"),
 		},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, World!"))
+			_, _ = w.Write([]byte("Hello, World!"))
 		},
 	})
 
@@ -156,7 +156,7 @@ func BenchmarkRouterWithTimeout(b *testing.B) {
 		Path:    "/hello",
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, World!"))
+			_, _ = w.Write([]byte("Hello, World!"))
 		},
 	})
 
@@ -195,7 +195,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 			Path:    path,
 			Methods: []string{"GET"},
 			Handler: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("Hello, World!"))
+				_, _ = w.Write([]byte("Hello, World!"))
 			},
 		})
 	}
@@ -246,7 +246,7 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 		Path:    "/hello",
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("Hello, World!"))
+			_, _ = w.Write([]byte("Hello, World!"))
 		},
 	})
 

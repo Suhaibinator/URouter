@@ -128,7 +128,10 @@ func TestLogging(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, err := w.Write([]byte("Hello, World!"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Wrap the handler with the Logging middleware
@@ -180,7 +183,10 @@ func TestAuthentication(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, err := w.Write([]byte("Hello, World!"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Wrap the handler with the Authentication middleware
@@ -290,7 +296,10 @@ func TestCORS(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, err := w.Write([]byte("Hello, World!"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Wrap the handler with the CORS middleware
@@ -350,7 +359,10 @@ func TestResponseWriter(t *testing.T) {
 	}
 
 	// Write a response
-	rw.Write([]byte("Hello, World!"))
+	_, err := rw.Write([]byte("Hello, World!"))
+	if err != nil {
+		t.Fatalf("Failed to write response: %v", err)
+	}
 
 	// Check that the response was written
 	if rr.Body.String() != "Hello, World!" {

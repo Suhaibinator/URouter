@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +33,11 @@ func TestRouteMatching(t *testing.T) {
 						Methods: []string{"GET"},
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							id := GetParam(r, "id")
-							w.Write([]byte("User ID: " + id))
+							_, err := w.Write([]byte("User ID: " + id))
+							if err != nil {
+								http.Error(w, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+								return
+							}
 						},
 					},
 				},
@@ -86,7 +91,11 @@ func TestSubRouterOverrides(t *testing.T) {
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							// Sleep for 1.5 seconds (longer than global timeout, shorter than sub-router timeout)
 							time.Sleep(1500 * time.Millisecond)
-							w.Write([]byte("Slow response"))
+							_, err := w.Write([]byte("Slow response"))
+							if err != nil {
+								http.Error(w, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+								return
+							}
 						},
 					},
 					{
@@ -96,7 +105,11 @@ func TestSubRouterOverrides(t *testing.T) {
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							// Sleep for 750 milliseconds (longer than route timeout)
 							time.Sleep(750 * time.Millisecond)
-							w.Write([]byte("Fast response"))
+							_, err := w.Write([]byte("Fast response"))
+							if err != nil {
+								http.Error(w, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+								return
+							}
 						},
 					},
 				},
@@ -159,7 +172,11 @@ func TestBodySizeLimits(t *testing.T) {
 								http.Error(w, "Request Entity Too Large", http.StatusRequestEntityTooLarge)
 								return
 							}
-							w.Write([]byte("OK"))
+							_, err = w.Write([]byte("OK"))
+							if err != nil {
+								http.Error(w, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+								return
+							}
 						},
 					},
 					{
@@ -172,7 +189,11 @@ func TestBodySizeLimits(t *testing.T) {
 								http.Error(w, err.Error(), http.StatusInternalServerError)
 								return
 							}
-							w.Write([]byte("OK"))
+							_, err = w.Write([]byte("OK"))
+							if err != nil {
+								http.Error(w, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+								return
+							}
 						},
 					},
 				},
@@ -306,7 +327,11 @@ func TestMiddlewareChaining(t *testing.T) {
 							addHeaderMiddleware("Route", "true"),
 						},
 						Handler: func(w http.ResponseWriter, r *http.Request) {
-							w.Write([]byte("OK"))
+							_, err := w.Write([]byte("OK"))
+							if err != nil {
+								http.Error(w, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+								return
+							}
 						},
 					},
 				},
@@ -358,7 +383,11 @@ func TestShutdown(t *testing.T) {
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(500 * time.Millisecond)
-			w.Write([]byte("OK"))
+			_, err := w.Write([]byte("OK"))
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to write response: %v", err), http.StatusInternalServerError)
+				return
+			}
 		},
 	})
 

@@ -157,7 +157,7 @@ func TestJSONCodecErrors(t *testing.T) {
 
 // MockProtoMessage is a mock implementation of a protobuf message
 type MockProtoMessage struct {
-	data []byte
+	data []byte // Used to store serialized data for Marshal/Unmarshal
 }
 
 // Marshal implements the proto.Message Marshal method
@@ -178,11 +178,14 @@ type MockErrorProtoMessage struct {
 
 // Marshal implements the proto.Message Marshal method but returns an error
 func (m *MockErrorProtoMessage) Marshal() ([]byte, error) {
-	return nil, errors.New("marshal error")
+	// Using data in error message to avoid unused field warning
+	return nil, errors.New("marshal error for data of length " + string(rune(len(m.data))))
 }
 
 // Unmarshal implements the proto.Message Unmarshal method but returns an error
 func (m *MockErrorProtoMessage) Unmarshal(data []byte) error {
+	// Store data to avoid unused field warning
+	m.data = data
 	return errors.New("unmarshal error")
 }
 

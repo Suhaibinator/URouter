@@ -112,11 +112,7 @@ func CreateUserHandler(r *http.Request, req CreateUserRequest) (CreateUserRespon
 	users[id] = user
 
 	// Return the response
-	return CreateUserResponse{
-		ID:    user.ID,
-		Name:  user.Name,
-		Email: user.Email,
-	}, nil
+	return CreateUserResponse(user), nil
 }
 
 // GetUserHandler handles getting a user
@@ -134,11 +130,7 @@ func GetUserHandler(r *http.Request, req GetUserRequest) (GetUserResponse, error
 	}
 
 	// Return the response
-	return GetUserResponse{
-		ID:    user.ID,
-		Name:  user.Name,
-		Email: user.Email,
-	}, nil
+	return GetUserResponse(user), nil
 }
 
 // UpdateUserHandler handles updating a user
@@ -169,11 +161,7 @@ func UpdateUserHandler(r *http.Request, req UpdateUserRequest) (UpdateUserRespon
 	users[id] = user
 
 	// Return the response
-	return UpdateUserResponse{
-		ID:    user.ID,
-		Name:  user.Name,
-		Email: user.Email,
-	}, nil
+	return UpdateUserResponse(user), nil
 }
 
 // DeleteUserHandler handles deleting a user
@@ -254,8 +242,17 @@ func ErrorHandler(r *http.Request, req EmptyRequest) (ErrorResponse, error) {
 
 func main() {
 	// Create a logger
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	logger, err := zap.NewProduction()
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer func() {
+		if syncErr := logger.Sync(); syncErr != nil {
+			// We can't use log.Fatalf here as it would exit the program
+			// Just log the error since we're already in a defer
+			log.Printf("Failed to sync logger: %v", syncErr)
+		}
+	}()
 
 	// Create a router configuration
 	routerConfig := router.RouterConfig{
@@ -320,9 +317,9 @@ func main() {
 	fmt.Println("  - GET /users (list users)")
 	fmt.Println("  - GET /error (trigger an error)")
 	fmt.Println("\nExample curl commands:")
-	fmt.Println("  curl -X POST -H \"Content-Type: application/json\" -d '{\"name\":\"Alice\",\"email\":\"alice@example.com\"}' http://localhost:8080/users")
+	fmt.Println("  curl -X POST -H \"Content-Type: application/json\" -d '{\"name\":\"Alice\", \"email\":\"alice@example.com\"}' http://localhost:8080/users")
 	fmt.Println("  curl http://localhost:8080/users/1")
-	fmt.Println("  curl -X PUT -H \"Content-Type: application/json\" -d '{\"name\":\"Alice Updated\",\"email\":\"alice@example.com\"}' http://localhost:8080/users/1")
+	fmt.Println("  curl -X PUT -H \"Content-Type: application/json\" -d '{\"name\":\"Alice Updated\", \"email\":\"alice@example.com\"}' http://localhost:8080/users/1")
 	fmt.Println("  curl -X DELETE http://localhost:8080/users/1")
 	fmt.Println("  curl http://localhost:8080/users")
 	fmt.Println("  curl http://localhost:8080/error")

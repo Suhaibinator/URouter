@@ -197,7 +197,10 @@ func TestAuthenticationWithProvider(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Create a middleware
@@ -233,7 +236,10 @@ func TestAuthenticationFunction(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Create an auth function
@@ -282,7 +288,10 @@ func TestNewBasicAuthMiddleware(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Wrap the handler
@@ -312,7 +321,10 @@ func TestNewBearerTokenMiddleware(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Wrap the handler
@@ -342,7 +354,10 @@ func TestNewBearerTokenValidatorMiddleware(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Wrap the handler
@@ -372,7 +387,10 @@ func TestNewAPIKeyMiddleware(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Wrap the handler

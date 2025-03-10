@@ -36,7 +36,7 @@ func TestSubRouterIntegration(t *testing.T) {
 						Methods: []string{"GET"},
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							w.Header().Set("Content-Type", "application/json")
-							w.Write([]byte(`{"users":["user1","user2"]}`))
+							_, _ = w.Write([]byte(`{"users":["user1","user2"]}`))
 						},
 					},
 				},
@@ -49,7 +49,7 @@ func TestSubRouterIntegration(t *testing.T) {
 						Methods: []string{"GET"},
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							w.Header().Set("Content-Type", "application/json")
-							w.Write([]byte(`{"users":["user3","user4"]}`))
+							_, _ = w.Write([]byte(`{"users":["user3","user4"]}`))
 						},
 					},
 				},
@@ -108,7 +108,7 @@ func TestPathParameters(t *testing.T) {
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							id := GetParam(r, "id")
 							w.Header().Set("Content-Type", "application/json")
-							w.Write([]byte(`{"id":"` + id + `"}`))
+							_, _ = w.Write([]byte(`{"id":"` + id + `"}`))
 						},
 					},
 					{
@@ -118,7 +118,7 @@ func TestPathParameters(t *testing.T) {
 							postId := GetParam(r, "postId")
 							commentId := GetParam(r, "commentId")
 							w.Header().Set("Content-Type", "application/json")
-							w.Write([]byte(`{"postId":"` + postId + `","commentId":"` + commentId + `"}`))
+							_, _ = w.Write([]byte(`{"postId":"` + postId + `","commentId":"` + commentId + `"}`))
 						},
 					},
 				},
@@ -414,7 +414,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 						},
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							w.WriteHeader(http.StatusOK)
-							w.Write([]byte("OK"))
+							_, _ = w.Write([]byte("OK"))
 						},
 					},
 				},
@@ -470,7 +470,7 @@ func TestGracefulShutdown(t *testing.T) {
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(100 * time.Millisecond)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		},
 	})
 
@@ -544,7 +544,7 @@ func TestEdgeCases(t *testing.T) {
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Root"))
+			_, _ = w.Write([]byte("Root"))
 		},
 	})
 
@@ -554,7 +554,7 @@ func TestEdgeCases(t *testing.T) {
 		Methods: []string{"GET"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Trailing"))
+			_, _ = w.Write([]byte("Trailing"))
 		},
 	})
 
@@ -565,7 +565,7 @@ func TestEdgeCases(t *testing.T) {
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			param := GetParam(r, "param")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(param))
+			_, _ = w.Write([]byte(param))
 		},
 	})
 
@@ -575,7 +575,7 @@ func TestEdgeCases(t *testing.T) {
 		Methods: []string{"GET", "POST", "PUT", "DELETE"},
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(r.Method))
+			_, _ = w.Write([]byte(r.Method))
 		},
 	})
 

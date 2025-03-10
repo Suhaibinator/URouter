@@ -24,7 +24,10 @@ func TestPrometheusMetrics(t *testing.T) {
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, err := w.Write([]byte("Hello, World!"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
 	})
 
 	// Create the middleware with all metrics enabled
@@ -130,7 +133,10 @@ func TestPrometheusResponseWriter(t *testing.T) {
 	}
 
 	// Write a response
-	prw.Write([]byte("Hello, World!"))
+	_, err := prw.Write([]byte("Hello, World!"))
+	if err != nil {
+		t.Fatalf("Failed to write response: %v", err)
+	}
 
 	// Check that the response was written
 	if rr.Body.String() != "Hello, World!" {
