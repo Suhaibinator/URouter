@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Suhaibinator/URouter/pkg/common"
@@ -131,10 +132,19 @@ func Timeout(timeout time.Duration) Middleware {
 			// Create a new request with the timeout context
 			r = r.WithContext(ctx)
 
+			// Create a mutex to protect access to the response writer
+			var wMutex sync.Mutex
+
+			// Create a wrapped response writer that uses the mutex
+			wrappedW := &mutexResponseWriter{
+				ResponseWriter: w,
+				mu:             &wMutex,
+			}
+
 			// Use a channel to signal when the handler is done
 			done := make(chan struct{})
 			go func() {
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(wrappedW, r)
 				close(done)
 			}()
 
@@ -144,10 +154,41 @@ func Timeout(timeout time.Duration) Middleware {
 				return
 			case <-ctx.Done():
 				// Timeout occurred
+				wMutex.Lock()
 				http.Error(w, "Request Timeout", http.StatusRequestTimeout)
+				wMutex.Unlock()
 				return
 			}
 		})
+	}
+}
+
+// mutexResponseWriter is a wrapper around http.ResponseWriter that uses a mutex to protect access
+type mutexResponseWriter struct {
+	http.ResponseWriter
+	mu *sync.Mutex
+}
+
+// WriteHeader acquires the mutex and calls the underlying ResponseWriter.WriteHeader
+func (rw *mutexResponseWriter) WriteHeader(statusCode int) {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	rw.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Write acquires the mutex and calls the underlying ResponseWriter.Write
+func (rw *mutexResponseWriter) Write(b []byte) (int, error) {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	return rw.ResponseWriter.Write(b)
+}
+
+// Flush acquires the mutex and calls the underlying ResponseWriter.Flush if it implements http.Flusher
+func (rw *mutexResponseWriter) Flush() {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
 	}
 }
 
