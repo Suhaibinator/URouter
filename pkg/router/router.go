@@ -172,18 +172,22 @@ func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Hand
 func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler {
 	// Create a handler that applies all the router's functionality
 	h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// Check if the router is shutting down
+		// First add to the wait group before checking shutdown status
+		r.wg.Add(1)
+
+		// Then check if the router is shutting down
 		r.shutdownMu.RLock()
 		isShutdown := r.shutdown
 		r.shutdownMu.RUnlock()
 
 		if isShutdown {
+			// If shutting down, decrement the wait group and return error
+			r.wg.Done()
 			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 			return
 		}
 
-		// Add the request to the wait group
-		r.wg.Add(1)
+		// Process the request and ensure wg.Done() is called when finished
 		defer r.wg.Done()
 
 		// Apply body size limit
@@ -197,10 +201,19 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout
 			defer cancel()
 			req = req.WithContext(ctx)
 
+			// Create a mutex to protect access to the response writer
+			var wMutex sync.Mutex
+
+			// Create a wrapped response writer that uses the mutex
+			wrappedW := &mutexResponseWriter{
+				ResponseWriter: w,
+				mu:             &wMutex,
+			}
+
 			// Use a channel to signal when the handler is done
 			done := make(chan struct{})
 			go func() {
-				handler(w, req)
+				handler(wrappedW, req)
 				close(done)
 			}()
 
@@ -216,7 +229,11 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout
 					zap.Duration("timeout", timeout),
 					zap.String("client_ip", req.RemoteAddr),
 				)
+
+				// Lock the mutex before writing to the response
+				wMutex.Lock()
 				http.Error(w, "Request Timeout", http.StatusRequestTimeout)
+				wMutex.Unlock()
 				return
 			}
 		} else {
@@ -535,6 +552,35 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 
 // Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher
 func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// mutexResponseWriter is a wrapper around http.ResponseWriter that uses a mutex to protect access
+type mutexResponseWriter struct {
+	http.ResponseWriter
+	mu *sync.Mutex
+}
+
+// WriteHeader acquires the mutex and calls the underlying ResponseWriter.WriteHeader
+func (rw *mutexResponseWriter) WriteHeader(statusCode int) {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	rw.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Write acquires the mutex and calls the underlying ResponseWriter.Write
+func (rw *mutexResponseWriter) Write(b []byte) (int, error) {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	return rw.ResponseWriter.Write(b)
+}
+
+// Flush acquires the mutex and calls the underlying ResponseWriter.Flush if it implements http.Flusher
+func (rw *mutexResponseWriter) Flush() {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
 	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
