@@ -118,10 +118,10 @@ func main() {
 				PathPrefix: "/require-auth",
 				Routes: []router.RouteConfigBase{
 					{
-						Path:        "/resource",
-						Methods:     []string{"GET"},
-						RequireAuth: true, // Uses the default auth middleware
-						Handler:     protectedHandler,
+						Path:      "/resource",
+						Methods:   []string{"GET"},
+						AuthLevel: router.AuthRequired, // Uses the default auth middleware
+						Handler:   protectedHandler,
 					},
 				},
 			},

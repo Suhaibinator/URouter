@@ -70,9 +70,10 @@ func TestGenericRouteDecodeError(t *testing.T) {
 
 	// Register a generic route
 	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
-		Path:    "/greet",
-		Methods: []string{"POST"},
-		Codec:   codec.NewJSONCodec[TestRequest, TestResponse](),
+		Path:      "/greet",
+		Methods:   []string{"POST"},
+		AuthLevel: NoAuth, // No authentication required
+		Codec:     codec.NewJSONCodec[TestRequest, TestResponse](),
 		Handler: func(req *http.Request, data TestRequest) (TestResponse, error) {
 			return TestResponse{
 				Greeting: "Hello, " + data.Name,
@@ -327,9 +328,9 @@ func TestAuthMiddleware(t *testing.T) {
 
 	// Register a route that requires authentication
 	r.RegisterRoute(RouteConfigBase{
-		Path:        "/protected",
-		Methods:     []string{"GET"},
-		RequireAuth: true,
+		Path:      "/protected",
+		Methods:   []string{"GET"},
+		AuthLevel: AuthRequired,
 		Handler: func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("Protected"))

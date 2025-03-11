@@ -63,10 +63,10 @@ func main() {
 				MaxBodySizeOverride: 2 << 20, // 2 MB
 				Routes: []router.RouteConfigBase{
 					{
-						Path:        "/health",
-						Methods:     []string{"GET"},
-						RequireAuth: false,
-						Handler:     HealthCheckHandler,
+						Path:      "/health",
+						Methods:   []string{"GET"},
+						AuthLevel: router.NoAuth,
+						Handler:   HealthCheckHandler,
 					},
 				},
 			},
@@ -78,12 +78,12 @@ func main() {
 
 	// Register a generic JSON route
 	router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
-		Path:        "/api/users",
-		Methods:     []string{"POST"},
-		RequireAuth: true,
-		Timeout:     3 * time.Second, // override
-		Codec:       codec.NewJSONCodec[CreateUserReq, CreateUserResp](),
-		Handler:     CreateUserHandler,
+		Path:      "/api/users",
+		Methods:   []string{"POST"},
+		AuthLevel: router.AuthRequired,
+		Timeout:   3 * time.Second, // override
+		Codec:     codec.NewJSONCodec[CreateUserReq, CreateUserResp](),
+		Handler:   CreateUserHandler,
 	})
 
 	// Start the server
