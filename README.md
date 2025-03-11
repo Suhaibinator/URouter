@@ -224,7 +224,11 @@ if err := srv.Shutdown(ctx); err != nil {
 
 ### Custom Authentication
 
-The default authentication middleware simply checks for the presence of an Authorization header. You can implement custom authentication by providing your own authentication function:
+SRouter provides two approaches to authentication:
+
+#### Boolean Authentication
+
+The simplest approach is to use a function that returns a boolean indicating whether authentication was successful:
 
 ```go
 // Create a custom authentication function
@@ -256,6 +260,126 @@ r.RegisterRoute(router.RouteConfigBase{
 	},
 })
 ```
+
+#### User-Returning Authentication
+
+For more advanced use cases, you can use a function that returns a user object and an error. This allows you to:
+
+1. Get detailed user information during authentication
+2. Store the user in the request context for use in handlers
+3. Implement fine-grained authorization based on user roles or permissions
+
+```go
+// Define your User type
+type User struct {
+	ID    string
+	Name  string
+	Email string
+	Roles []string
+}
+
+// Create a custom authentication function that returns a User
+func customUserAuth(r *http.Request) (*User, error) {
+	// Get the token from the Authorization header
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		return nil, errors.New("no authorization header")
+	}
+	
+	// Remove the "Bearer " prefix if present
+	token = strings.TrimPrefix(token, "Bearer ")
+	
+	// Validate the token and retrieve the user
+	user, err := validateTokenAndGetUser(token)
+	if err != nil {
+		return nil, err
+	}
+	
+	return user, nil
+}
+
+// Create a middleware that uses the custom authentication function
+authMiddleware := middleware.AuthenticationWithUser[User](customUserAuth)
+
+// Apply the middleware to a route
+r.RegisterRoute(router.RouteConfigBase{
+	Path:        "/protected",
+	Methods:     []string{"GET"},
+	Middlewares: []common.Middleware{
+		authMiddleware,
+	},
+	Handler: func(w http.ResponseWriter, r *http.Request) {
+		// Get the user from the context
+		user := middleware.GetUser[User](r)
+		if user == nil {
+			http.Error(w, "User not found in context", http.StatusInternalServerError)
+			return
+		}
+		
+		// Use the user object
+		fmt.Fprintf(w, "Hello, %s!", user.Name)
+	},
+})
+```
+
+SRouter provides several pre-built user authentication providers:
+
+```go
+// Basic Authentication with User
+middleware.NewBasicAuthWithUserMiddleware[User](
+	func(username, password string) (*User, error) {
+		// Validate credentials and return user
+		if username == "user1" && password == "password1" {
+			return &User{
+				ID:    "1",
+				Name:  "User One",
+				Email: "user1@example.com",
+				Roles: []string{"user"},
+			}, nil
+		}
+		return nil, errors.New("invalid credentials")
+	},
+	logger,
+)
+
+// Bearer Token Authentication with User
+middleware.NewBearerTokenWithUserMiddleware[User](
+	func(token string) (*User, error) {
+		// Validate token and return user
+		if token == "valid-token" {
+			return &User{
+				ID:    "1",
+				Name:  "User One",
+				Email: "user1@example.com",
+				Roles: []string{"user"},
+			}, nil
+		}
+		return nil, errors.New("invalid token")
+	},
+	logger,
+)
+
+// API Key Authentication with User
+middleware.NewAPIKeyWithUserMiddleware[User](
+	func(key string) (*User, error) {
+		// Validate API key and return user
+		if key == "valid-key" {
+			return &User{
+				ID:    "1",
+				Name:  "User One",
+				Email: "user1@example.com",
+				Roles: []string{"user"},
+			}, nil
+		}
+		return nil, errors.New("invalid API key")
+	},
+	"X-API-Key",
+	"api_key",
+	logger,
+)
+```
+
+See the `examples/user-auth` directory for a complete example.
 
 ### Custom Error Handling
 
