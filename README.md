@@ -28,9 +28,12 @@ go get github.com/Suhaibinator/SRouter
 
 ## Requirements
 
-- Go 1.24 or higher
-- [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter)
-- [go.uber.org/zap](https://github.com/uber-go/zap) for logging
+- Go 1.24.0 or higher
+- [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) v1.3.0 or higher for high-performance routing
+- [go.uber.org/zap](https://github.com/uber-go/zap) v1.27.0 or higher for structured logging
+- [github.com/prometheus/client_golang](https://github.com/prometheus/client_golang) v1.21.1 or higher for Prometheus metrics (optional)
+
+All dependencies are properly documented with Go modules and will be automatically installed when you run `go get github.com/Suhaibinator/SRouter`.
 
 ## Getting Started
 
