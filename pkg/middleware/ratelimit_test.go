@@ -19,7 +19,7 @@ func TestRateLimit(t *testing.T) {
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Test cases
@@ -66,7 +66,7 @@ func TestRateLimit(t *testing.T) {
 				Strategy:   "ip",
 				ExceededHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusServiceUnavailable)
-					w.Write([]byte("Custom Error"))
+					_, _ = w.Write([]byte("Custom Error"))
 				}),
 			},
 			requests:       4,
@@ -275,7 +275,7 @@ func TestCustomKeyExtractor(t *testing.T) {
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Create a rate limit config with a custom key extractor
