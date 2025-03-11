@@ -28,7 +28,7 @@ go get github.com/Suhaibinator/SRouter
 
 ## Requirements
 
-- Go 1.18 or higher (for generics support)
+- Go 1.24 or higher
 - [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter)
 - [go.uber.org/zap](https://github.com/uber-go/zap) for logging
 

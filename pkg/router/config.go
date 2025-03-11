@@ -1,3 +1,5 @@
+// Package router provides a flexible and feature-rich HTTP routing framework.
+// It supports middleware, sub-routers, generic handlers, and various configuration options.
 package router
 
 import (
@@ -8,7 +10,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// PrometheusConfig defines the configuration for Prometheus metrics
+// PrometheusConfig defines the configuration for Prometheus metrics.
+// It allows customization of how metrics are collected and labeled.
 type PrometheusConfig struct {
 	Registry         interface{} // Prometheus registry (prometheus.Registerer)
 	Namespace        string      // Namespace for metrics
@@ -19,7 +22,8 @@ type PrometheusConfig struct {
 	EnableErrors     bool        // Enable error metrics
 }
 
-// RouterConfig defines the global configuration for the router
+// RouterConfig defines the global configuration for the router.
+// It includes settings for logging, timeouts, metrics, and middleware.
 type RouterConfig struct {
 	Logger            *zap.Logger         // Logger for all router operations
 	GlobalTimeout     time.Duration       // Default response timeout for all routes
@@ -31,7 +35,8 @@ type RouterConfig struct {
 	Middlewares       []common.Middleware // Global middlewares applied to all routes
 }
 
-// SubRouterConfig defines configuration for a group of routes with a common path prefix
+// SubRouterConfig defines configuration for a group of routes with a common path prefix.
+// This allows for organizing routes into logical groups and applying shared configuration.
 type SubRouterConfig struct {
 	PathPrefix          string              // Common path prefix for all routes in this sub-router
 	TimeoutOverride     time.Duration       // Override global timeout for all routes in this sub-router
@@ -40,7 +45,8 @@ type SubRouterConfig struct {
 	Middlewares         []common.Middleware // Middlewares applied to all routes in this sub-router
 }
 
-// RouteConfigBase defines the base configuration for a route without generics
+// RouteConfigBase defines the base configuration for a route without generics.
+// It includes settings for path, HTTP methods, authentication, timeouts, and middleware.
 type RouteConfigBase struct {
 	Path        string              // Route path (will be prefixed with sub-router path prefix if applicable)
 	Methods     []string            // HTTP methods this route handles
@@ -51,7 +57,9 @@ type RouteConfigBase struct {
 	Middlewares []common.Middleware // Middlewares applied to this specific route
 }
 
-// RouteConfig defines a route with generic request and response types
+// RouteConfig defines a route with generic request and response types.
+// It extends RouteConfigBase with type parameters for request and response data,
+// allowing for strongly-typed handlers and automatic marshaling/unmarshaling.
 type RouteConfig[T any, U any] struct {
 	Path        string               // Route path (will be prefixed with sub-router path prefix if applicable)
 	Methods     []string             // HTTP methods this route handles
@@ -63,14 +71,32 @@ type RouteConfig[T any, U any] struct {
 	Middlewares []common.Middleware  // Middlewares applied to this specific route
 }
 
-// Middleware is an alias for common.Middleware
+// Middleware is an alias for common.Middleware.
+// It represents a function that wraps an http.Handler to provide additional functionality.
 type Middleware = common.Middleware
 
-// GenericHandler defines a handler function with generic request and response types
+// GenericHandler defines a handler function with generic request and response types.
+// It takes an http.Request and a typed request data object, and returns a typed response
+// object and an error. This allows for strongly-typed request and response handling.
+// The type parameters T and U represent the request and response data types respectively.
+// When used with RegisterGenericRoute, the framework automatically handles decoding the
+// request and encoding the response using the specified Codec.
 type GenericHandler[T any, U any] func(r *http.Request, data T) (U, error)
 
-// Codec defines an interface for marshaling and unmarshaling request and response data
+// Codec defines an interface for marshaling and unmarshaling request and response data.
+// It provides methods for decoding request data from an HTTP request and encoding
+// response data to an HTTP response. This allows for different data formats (e.g., JSON, Protocol Buffers).
+// The framework includes implementations for JSON and Protocol Buffers in the codec package.
 type Codec[T any, U any] interface {
+	// Decode extracts and deserializes data from an HTTP request into a value of type T.
+	// It reads the request body and converts it from the wire format (e.g., JSON, Protocol Buffers)
+	// into the appropriate Go type. If the deserialization fails, it returns an error.
+	// The type T represents the request data type.
 	Decode(r *http.Request) (T, error)
+
+	// Encode serializes a value of type U and writes it to the HTTP response.
+	// It converts the Go value to the wire format (e.g., JSON, Protocol Buffers) and
+	// sets appropriate headers (e.g., Content-Type). If the serialization fails, it returns an error.
+	// The type U represents the response data type.
 	Encode(w http.ResponseWriter, resp U) error
 }

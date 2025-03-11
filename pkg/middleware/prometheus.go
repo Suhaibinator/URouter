@@ -1,3 +1,4 @@
+// Package middleware provides a collection of HTTP middleware components for the SRouter framework.
 package middleware
 
 import (
@@ -6,7 +7,11 @@ import (
 	"time"
 )
 
-// PrometheusMetrics is a middleware that collects Prometheus metrics
+// PrometheusMetrics is a middleware that collects Prometheus metrics for HTTP requests.
+// It can track request latency, throughput, queries per second, and error rates.
+// This is a placeholder implementation that demonstrates the structure but doesn't
+// actually record metrics to Prometheus. In a real implementation, you would use
+// the prometheus client library.
 func PrometheusMetrics(registry interface{}, namespace, subsystem string, enableLatency, enableThroughput, enableQPS, enableErrors bool) Middleware {
 	// In a real implementation, we would use the prometheus client library
 	// For now, we'll just create a middleware that logs metrics
@@ -60,7 +65,10 @@ func PrometheusMetrics(registry interface{}, namespace, subsystem string, enable
 	}
 }
 
-// PrometheusHandler returns an HTTP handler for exposing Prometheus metrics
+// PrometheusHandler returns an HTTP handler for exposing Prometheus metrics.
+// This handler would typically be mounted at a path like "/metrics" to allow
+// Prometheus to scrape the metrics. This is a placeholder implementation that
+// doesn't actually expose real metrics.
 func PrometheusHandler(registry interface{}) http.Handler {
 	// In a real implementation, we would use the prometheus client library
 	// to create a handler that exposes metrics
@@ -75,27 +83,31 @@ func PrometheusHandler(registry interface{}) http.Handler {
 	})
 }
 
-// prometheusResponseWriter is a wrapper around http.ResponseWriter that captures metrics
+// prometheusResponseWriter is a wrapper around http.ResponseWriter that captures metrics.
+// It tracks the status code and number of bytes written to the response.
 type prometheusResponseWriter struct {
 	http.ResponseWriter
 	statusCode   int
 	bytesWritten int64
 }
 
-// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader.
+// This allows the middleware to track the HTTP status code for metrics.
 func (rw *prometheusResponseWriter) WriteHeader(statusCode int) {
 	rw.statusCode = statusCode
 	rw.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Write captures the number of bytes written and calls the underlying ResponseWriter.Write
+// Write captures the number of bytes written and calls the underlying ResponseWriter.Write.
+// This allows the middleware to track the response size for throughput metrics.
 func (rw *prometheusResponseWriter) Write(b []byte) (int, error) {
 	n, err := rw.ResponseWriter.Write(b)
 	rw.bytesWritten += int64(n)
 	return n, err
 }
 
-// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher
+// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This allows streaming responses to be flushed to the client immediately.
 func (rw *prometheusResponseWriter) Flush() {
 	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

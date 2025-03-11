@@ -1,3 +1,5 @@
+// Package router provides a flexible and feature-rich HTTP routing framework.
+// It supports middleware, sub-routers, generic handlers, and various configuration options.
 package router
 
 import (
@@ -14,7 +16,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// Router is the main router struct that implements http.Handler
+// Router is the main router struct that implements http.Handler.
+// It provides routing, middleware support, graceful shutdown, and other features.
 type Router struct {
 	config      RouterConfig
 	router      *httprouter.Router
@@ -25,15 +28,18 @@ type Router struct {
 	shutdownMu  sync.RWMutex
 }
 
-// contextKey is a type for context keys
+// contextKey is a type for context keys.
+// It's used to store and retrieve values from request contexts.
 type contextKey string
 
 const (
-	// ParamsKey is the key used to store httprouter.Params in the request context
+	// ParamsKey is the key used to store httprouter.Params in the request context.
+	// This allows route parameters to be accessed from handlers and middleware.
 	ParamsKey contextKey = "params"
 )
 
-// NewRouter creates a new Router with the given configuration
+// NewRouter creates a new Router with the given configuration.
+// It initializes the underlying httprouter, sets up logging, and registers routes from sub-routers.
 func NewRouter(config RouterConfig) *Router {
 	// Initialize the httprouter
 	hr := httprouter.New()
@@ -80,7 +86,8 @@ func NewRouter(config RouterConfig) *Router {
 	return r
 }
 
-// registerSubRouter registers all routes in a sub-router
+// registerSubRouter registers all routes in a sub-router.
+// It applies the sub-router's path prefix to all routes and registers them with the router.
 func (r *Router) registerSubRouter(sr SubRouterConfig) {
 	for _, route := range sr.Routes {
 		// Create a full path by combining the sub-router prefix with the route path
@@ -100,8 +107,9 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) {
 	}
 }
 
-// RegisterRoute registers a route with the router
-// For generic routes, use RegisterGenericRoute function
+// RegisterRoute registers a route with the router.
+// It creates a handler with all middlewares applied and registers it with the underlying httprouter.
+// For generic routes with type parameters, use RegisterGenericRoute function instead.
 func (r *Router) RegisterRoute(route RouteConfigBase) {
 	// Get effective timeout and max body size for this route
 	timeout := r.getEffectiveTimeout(route.Timeout, 0)
@@ -116,8 +124,10 @@ func (r *Router) RegisterRoute(route RouteConfigBase) {
 	}
 }
 
-// RegisterGenericRoute registers a route with generic request and response types
-// This is a standalone function rather than a method because Go methods cannot have type parameters
+// RegisterGenericRoute registers a route with generic request and response types.
+// This is a standalone function rather than a method because Go methods cannot have type parameters.
+// It creates a handler that uses the codec to decode the request and encode the response,
+// applies middleware, and registers the route with the router.
 func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) {
 	// Get effective timeout and max body size for this route
 	timeout := r.getEffectiveTimeout(route.Timeout, 0)
@@ -156,7 +166,8 @@ func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) {
 	}
 }
 
-// convertToHTTPRouterHandle converts an http.Handler to an httprouter.Handle
+// convertToHTTPRouterHandle converts an http.Handler to an httprouter.Handle.
+// It stores the route parameters in the request context so they can be accessed by handlers.
 func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Handle {
 	return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		// Store the params in the request context
@@ -168,7 +179,9 @@ func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Hand
 	}
 }
 
-// wrapHandler wraps a handler with all the necessary middleware
+// wrapHandler wraps a handler with all the necessary middleware.
+// It applies authentication, timeout, body size limits, and other middleware
+// to create a complete request processing pipeline.
 func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler {
 	// Create a handler that applies all the router's functionality
 	h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -263,7 +276,9 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout
 	return h
 }
 
-// ServeHTTP implements the http.Handler interface
+// ServeHTTP implements the http.Handler interface.
+// It handles HTTP requests by applying metrics and tracing if enabled,
+// and then delegating to the underlying httprouter.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Create a response writer that captures metrics
 	var rw http.ResponseWriter
@@ -344,7 +359,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.router.ServeHTTP(rw, req)
 }
 
-// metricsResponseWriter is a wrapper around http.ResponseWriter that captures metrics
+// metricsResponseWriter is a wrapper around http.ResponseWriter that captures metrics.
+// It tracks the status code, bytes written, and timing information for each response.
 type metricsResponseWriter struct {
 	http.ResponseWriter
 	statusCode   int
@@ -354,27 +370,32 @@ type metricsResponseWriter struct {
 	router       *Router
 }
 
-// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader.
+// This allows the router to track the HTTP status code for metrics and logging.
 func (rw *metricsResponseWriter) WriteHeader(statusCode int) {
 	rw.statusCode = statusCode
 	rw.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Write captures the number of bytes written and calls the underlying ResponseWriter.Write
+// Write captures the number of bytes written and calls the underlying ResponseWriter.Write.
+// This allows the router to track the response size for metrics and logging.
 func (rw *metricsResponseWriter) Write(b []byte) (int, error) {
 	n, err := rw.ResponseWriter.Write(b)
 	rw.bytesWritten += int64(n)
 	return n, err
 }
 
-// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher
+// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This allows streaming responses to be flushed to the client immediately.
 func (rw *metricsResponseWriter) Flush() {
 	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
-// Shutdown gracefully shuts down the router
+// Shutdown gracefully shuts down the router.
+// It stops accepting new requests and waits for existing requests to complete.
+// If the context is canceled before all requests complete, it returns the context's error.
 func (r *Router) Shutdown(ctx context.Context) error {
 	// Mark the router as shutting down
 	r.shutdownMu.Lock()
@@ -397,18 +418,21 @@ func (r *Router) Shutdown(ctx context.Context) error {
 	}
 }
 
-// GetParams retrieves the httprouter.Params from the request context
+// GetParams retrieves the httprouter.Params from the request context.
+// This allows handlers to access route parameters extracted from the URL.
 func GetParams(r *http.Request) httprouter.Params {
 	params, _ := r.Context().Value(ParamsKey).(httprouter.Params)
 	return params
 }
 
-// GetParam retrieves a specific parameter from the request context
+// GetParam retrieves a specific parameter from the request context.
+// It's a convenience function that combines GetParams and ByName.
 func GetParam(r *http.Request, name string) string {
 	return GetParams(r).ByName(name)
 }
 
-// getEffectiveTimeout returns the effective timeout for a route
+// getEffectiveTimeout returns the effective timeout for a route.
+// It considers route-specific, sub-router, and global timeout settings in that order of precedence.
 func (r *Router) getEffectiveTimeout(routeTimeout, subRouterTimeout time.Duration) time.Duration {
 	if routeTimeout > 0 {
 		return routeTimeout
@@ -419,7 +443,8 @@ func (r *Router) getEffectiveTimeout(routeTimeout, subRouterTimeout time.Duratio
 	return r.config.GlobalTimeout
 }
 
-// getEffectiveMaxBodySize returns the effective max body size for a route
+// getEffectiveMaxBodySize returns the effective max body size for a route.
+// It considers route-specific, sub-router, and global max body size settings in that order of precedence.
 func (r *Router) getEffectiveMaxBodySize(routeMaxBodySize, subRouterMaxBodySize int64) int64 {
 	if routeMaxBodySize > 0 {
 		return routeMaxBodySize
@@ -430,7 +455,8 @@ func (r *Router) getEffectiveMaxBodySize(routeMaxBodySize, subRouterMaxBodySize 
 	return r.config.GlobalMaxBodySize
 }
 
-// handleError handles an error by logging it and returning an appropriate HTTP response
+// handleError handles an error by logging it and returning an appropriate HTTP response.
+// It checks if the error is a specific HTTPError and uses its status code and message if available.
 func (r *Router) handleError(w http.ResponseWriter, req *http.Request, err error, statusCode int, message string) {
 	// Log the error
 	r.logger.Error(message,
@@ -450,18 +476,24 @@ func (r *Router) handleError(w http.ResponseWriter, req *http.Request, err error
 	http.Error(w, message, statusCode)
 }
 
-// HTTPError represents an HTTP error with a status code and message
+// HTTPError represents an HTTP error with a status code and message.
+// It can be used to return specific HTTP errors from handlers.
+// When returned from a handler, the router will use the status code and message
+// to generate an appropriate HTTP response. This allows handlers to control
+// the exact error response sent to clients.
 type HTTPError struct {
-	StatusCode int
-	Message    string
+	StatusCode int    // HTTP status code (e.g., 400, 404, 500)
+	Message    string // Error message to be sent in the response body
 }
 
-// Error implements the error interface
+// Error implements the error interface.
+// It returns a string representation of the HTTP error in the format "status: message".
 func (e *HTTPError) Error() string {
 	return fmt.Sprintf("%d: %s", e.StatusCode, e.Message)
 }
 
-// NewHTTPError creates a new HTTPError
+// NewHTTPError creates a new HTTPError with the specified status code and message.
+// It's a convenience function for creating HTTP errors in handlers.
 func NewHTTPError(statusCode int, message string) *HTTPError {
 	return &HTTPError{
 		StatusCode: statusCode,
@@ -469,7 +501,9 @@ func NewHTTPError(statusCode int, message string) *HTTPError {
 	}
 }
 
-// recoveryMiddleware is a middleware that recovers from panics
+// recoveryMiddleware is a middleware that recovers from panics in handlers.
+// It logs the panic and returns a 500 Internal Server Error response.
+// This prevents the server from crashing when a handler panics.
 func (r *Router) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		defer func() {
@@ -490,7 +524,9 @@ func (r *Router) recoveryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// authMiddleware is a middleware that checks if a request is authenticated
+// authMiddleware is a middleware that checks if a request is authenticated.
+// This is a placeholder implementation that just checks for the presence of an Authorization header.
+// In a real application, you would implement proper authentication logic here.
 func (r *Router) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// This is a placeholder for actual authentication logic
@@ -507,7 +543,8 @@ func (r *Router) authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// loggingMiddleware is a middleware that logs requests
+// LoggingMiddleware is a middleware that logs HTTP requests and responses.
+// It captures the request method, path, status code, and duration.
 func LoggingMiddleware(logger *zap.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -533,51 +570,59 @@ func LoggingMiddleware(logger *zap.Logger) Middleware {
 	}
 }
 
-// responseWriter is a wrapper around http.ResponseWriter that captures the status code
+// responseWriter is a wrapper around http.ResponseWriter that captures the status code.
+// This allows middleware to inspect the status code after the handler has completed.
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
 }
 
-// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader.
+// This allows middleware to inspect the status code after the handler has completed.
 func (rw *responseWriter) WriteHeader(statusCode int) {
 	rw.statusCode = statusCode
 	rw.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Write calls the underlying ResponseWriter.Write
+// Write calls the underlying ResponseWriter.Write.
+// It passes through the write operation to the wrapped ResponseWriter.
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	return rw.ResponseWriter.Write(b)
 }
 
-// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher
+// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This allows streaming responses to be flushed to the client immediately.
 func (rw *responseWriter) Flush() {
 	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
-// mutexResponseWriter is a wrapper around http.ResponseWriter that uses a mutex to protect access
+// mutexResponseWriter is a wrapper around http.ResponseWriter that uses a mutex to protect access.
+// This ensures thread-safety when writing to the response from multiple goroutines.
 type mutexResponseWriter struct {
 	http.ResponseWriter
 	mu *sync.Mutex
 }
 
-// WriteHeader acquires the mutex and calls the underlying ResponseWriter.WriteHeader
+// WriteHeader acquires the mutex and calls the underlying ResponseWriter.WriteHeader.
+// This ensures thread-safety when setting the status code from multiple goroutines.
 func (rw *mutexResponseWriter) WriteHeader(statusCode int) {
 	rw.mu.Lock()
 	defer rw.mu.Unlock()
 	rw.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Write acquires the mutex and calls the underlying ResponseWriter.Write
+// Write acquires the mutex and calls the underlying ResponseWriter.Write.
+// This ensures thread-safety when writing the response body from multiple goroutines.
 func (rw *mutexResponseWriter) Write(b []byte) (int, error) {
 	rw.mu.Lock()
 	defer rw.mu.Unlock()
 	return rw.ResponseWriter.Write(b)
 }
 
-// Flush acquires the mutex and calls the underlying ResponseWriter.Flush if it implements http.Flusher
+// Flush acquires the mutex and calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This ensures thread-safety when flushing the response from multiple goroutines.
 func (rw *mutexResponseWriter) Flush() {
 	rw.mu.Lock()
 	defer rw.mu.Unlock()
