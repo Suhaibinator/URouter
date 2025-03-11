@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Suhaibinator/URouter/pkg/common"
+	"github.com/Suhaibinator/SRouter/pkg/common"
 	"go.uber.org/zap"
 )
 

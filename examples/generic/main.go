@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Suhaibinator/URouter/pkg/codec"
-	"github.com/Suhaibinator/URouter/pkg/router"
+	"github.com/Suhaibinator/SRouter/pkg/codec"
+	"github.com/Suhaibinator/SRouter/pkg/router"
 	"go.uber.org/zap"
 )
 

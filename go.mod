@@ -1,4 +1,4 @@
-module github.com/Suhaibinator/URouter
+module github.com/Suhaibinator/SRouter
 
 go 1.24.0
 

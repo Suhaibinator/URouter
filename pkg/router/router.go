@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Suhaibinator/URouter/pkg/common"
-	"github.com/Suhaibinator/URouter/pkg/middleware"
+	"github.com/Suhaibinator/SRouter/pkg/common"
+	"github.com/Suhaibinator/SRouter/pkg/middleware"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
 )

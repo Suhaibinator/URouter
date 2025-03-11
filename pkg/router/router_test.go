@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Suhaibinator/URouter/pkg/codec"
-	"github.com/Suhaibinator/URouter/pkg/common"
+	"github.com/Suhaibinator/SRouter/pkg/codec"
+	"github.com/Suhaibinator/SRouter/pkg/common"
 	"go.uber.org/zap"
 )
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Suhaibinator/URouter/pkg/codec"
+	"github.com/Suhaibinator/SRouter/pkg/codec"
 )
 
 // TestNewRouterWithNilLogger tests creating a router with a nil logger

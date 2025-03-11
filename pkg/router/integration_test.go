@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Suhaibinator/URouter/pkg/codec"
-	"github.com/Suhaibinator/URouter/pkg/middleware"
+	"github.com/Suhaibinator/SRouter/pkg/codec"
+	"github.com/Suhaibinator/SRouter/pkg/middleware"
 	"go.uber.org/zap"
 )
 

@@ -1,11 +1,11 @@
-# URouter
+# SRouter
 
-URouter is a high-performance HTTP router for Go that wraps [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) with advanced features like sub-router overrides, middleware support, and generic-based marshaling/unmarshaling.
+SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) with advanced features like sub-router overrides, middleware support, and generic-based marshaling/unmarshaling.
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/Suhaibinator/URouter)](https://goreportcard.com/report/github.com/Suhaibinator/URouter)
-[![GoDoc](https://godoc.org/github.com/Suhaibinator/URouter?status.svg)](https://godoc.org/github.com/Suhaibinator/URouter)
-[![Tests](https://github.com/Suhaibinator/URouter/actions/workflows/tests.yml/badge.svg)](https://github.com/Suhaibinator/URouter/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/Suhaibinator/URouter/graph/badge.svg?token=NNIYO5HKX7)](https://codecov.io/gh/Suhaibinator/URouter)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Suhaibinator/SRouter)](https://goreportcard.com/report/github.com/Suhaibinator/SRouter)
+[![GoDoc](https://godoc.org/github.com/Suhaibinator/SRouter?status.svg)](https://godoc.org/github.com/Suhaibinator/SRouter)
+[![Tests](https://github.com/Suhaibinator/SRouter/actions/workflows/tests.yml/badge.svg)](https://github.com/Suhaibinator/SRouter/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/Suhaibinator/SRouter/graph/badge.svg?token=NNIYO5HKX7)](https://codecov.io/gh/Suhaibinator/SRouter)
 
 ## Features
 
@@ -23,7 +23,7 @@ URouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 ## Installation
 
 ```bash
-go get github.com/Suhaibinator/URouter
+go get github.com/Suhaibinator/SRouter
 ```
 
 ## Requirements
@@ -36,7 +36,7 @@ go get github.com/Suhaibinator/URouter
 
 ### Basic Usage
 
-Here's a simple example of how to use URouter:
+Here's a simple example of how to use SRouter:
 
 ```go
 package main
@@ -47,7 +47,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Suhaibinator/URouter/pkg/router"
+	"github.com/Suhaibinator/SRouter/pkg/router"
 	"go.uber.org/zap"
 )
 
@@ -126,7 +126,7 @@ routerConfig := router.RouterConfig{
 
 ### Using Generic Routes
 
-URouter supports generic routes for type-safe request and response handling:
+SRouter supports generic routes for type-safe request and response handling:
 
 ```go
 // Define request and response types
@@ -163,7 +163,7 @@ router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]
 
 ### Using Path Parameters
 
-URouter makes it easy to access path parameters:
+SRouter makes it easy to access path parameters:
 
 ```go
 func GetUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +181,7 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
 ### Graceful Shutdown
 
-URouter provides a `Shutdown` method for graceful shutdown:
+SRouter provides a `Shutdown` method for graceful shutdown:
 
 ```go
 // Create a server
@@ -381,7 +381,7 @@ router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]
 
 ### Prometheus Metrics
 
-URouter provides built-in support for Prometheus metrics:
+SRouter provides built-in support for Prometheus metrics:
 
 ```go
 // Create a Prometheus registry
@@ -491,7 +491,7 @@ type RouteConfig[T any, U any] struct {
 
 ## Middleware Reference
 
-URouter provides several built-in middleware functions:
+SRouter provides several built-in middleware functions:
 
 ### Logging
 
@@ -511,7 +511,7 @@ middleware.Recovery(logger *zap.Logger) Middleware
 
 ### Authentication
 
-URouter provides several authentication middleware options:
+SRouter provides several authentication middleware options:
 
 #### Basic Authentication
 
@@ -662,7 +662,7 @@ middleware.PrometheusHandler(registry interface{}) http.Handler
 
 ## Codec Reference
 
-URouter provides two built-in codecs:
+SRouter provides two built-in codecs:
 
 ### JSONCodec
 
@@ -732,11 +732,11 @@ type HTTPError struct {
 
 ## Performance Considerations
 
-URouter is designed to be highly performant. Here are some tips to get the best performance:
+SRouter is designed to be highly performant. Here are some tips to get the best performance:
 
 ### Path Matching
 
-URouter uses julienschmidt/httprouter's O(1) or O(log n) path matching algorithm, which is much faster than regular expression-based routers.
+SRouter uses julienschmidt/httprouter's O(1) or O(log n) path matching algorithm, which is much faster than regular expression-based routers.
 
 ### Middleware Ordering
 
@@ -744,7 +744,7 @@ The order of middlewares matters. Middlewares are applied in reverse order, so t
 
 ### Memory Allocation
 
-URouter minimizes allocations in the hot path. However, you can further reduce allocations by:
+SRouter minimizes allocations in the hot path. However, you can further reduce allocations by:
 
 - Reusing request and response objects when possible
 - Using sync.Pool for frequently allocated objects
@@ -766,7 +766,7 @@ Setting appropriate body size limits is important for security and performance:
 
 ## Logging
 
-URouter uses intelligent logging with appropriate log levels to provide useful information without creating log spam:
+SRouter uses intelligent logging with appropriate log levels to provide useful information without creating log spam:
 
 - **Error**: For server errors (status code 500+), timeouts, panics, and other exceptional conditions
 - **Warn**: For client errors (status code 400-499), slow requests (>1s), and potentially harmful situations
@@ -795,7 +795,7 @@ logger, _ := config.Build()
 
 ### Metrics and Tracing
 
-URouter provides built-in support for metrics collection and distributed tracing. You can enable these features by setting the `EnableMetrics` and `EnableTracing` flags in the `RouterConfig`:
+SRouter provides built-in support for metrics collection and distributed tracing. You can enable these features by setting the `EnableMetrics` and `EnableTracing` flags in the `RouterConfig`:
 
 ```go
 routerConfig := router.RouterConfig{
@@ -806,13 +806,13 @@ routerConfig := router.RouterConfig{
 }
 ```
 
-When metrics are enabled, URouter will log detailed information about each request, including:
+When metrics are enabled, SRouter will log detailed information about each request, including:
 - HTTP method and path
 - Status code
 - Response time
 - Response size in bytes
 
-When tracing is enabled, URouter will log additional information about each request, including:
+When tracing is enabled, SRouter will log additional information about each request, including:
 - Remote address
 - User agent
 - Request headers
@@ -822,7 +822,7 @@ This information can be used to monitor the performance of your application and 
 
 ### Prometheus Metrics
 
-URouter also supports Prometheus metrics collection. You can enable this feature by providing a `PrometheusConfig` in the `RouterConfig`:
+SRouter also supports Prometheus metrics collection. You can enable this feature by providing a `PrometheusConfig` in the `RouterConfig`:
 
 ```go
 routerConfig := router.RouterConfig{

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Suhaibinator/URouter/pkg/middleware"
-	"github.com/Suhaibinator/URouter/pkg/router"
+	"github.com/Suhaibinator/SRouter/pkg/middleware"
+	"github.com/Suhaibinator/SRouter/pkg/router"
 	"go.uber.org/zap"
 )
 

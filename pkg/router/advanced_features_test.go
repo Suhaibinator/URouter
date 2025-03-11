@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Suhaibinator/URouter/pkg/codec"
+	"github.com/Suhaibinator/SRouter/pkg/codec"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
