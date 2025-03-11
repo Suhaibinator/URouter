@@ -11,11 +11,12 @@ SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 
 - **High Performance**: Built on top of julienschmidt/httprouter for blazing-fast O(1) path matching
 - **Comprehensive Test Coverage**: Maintained at over 90% code coverage to ensure reliability
-- **Sub-Router Overrides**: Configure timeouts and body size limits at the global, sub-router, or route level
+- **Sub-Router Overrides**: Configure timeouts, body size limits, and rate limits at the global, sub-router, or route level
 - **Middleware Support**: Apply middleware at the global, sub-router, or route level with proper chaining
 - **Generic-Based Marshaling/Unmarshaling**: Use Go 1.18+ generics for type-safe request and response handling
 - **Configurable Timeouts**: Set timeouts at the global, sub-router, or route level with cascading defaults
 - **Body Size Limits**: Configure maximum request body size at different levels to prevent DoS attacks
+- **Rate Limiting**: Flexible rate limiting with support for IP-based, user-based, and custom strategies
 - **Path Parameters**: Easy access to path parameters via request context
 - **Graceful Shutdown**: Properly handle in-flight requests during shutdown
 - **Prometheus Integration**: Built-in support for Prometheus metrics
@@ -222,6 +223,193 @@ if err := srv.Shutdown(ctx); err != nil {
 ```
 
 ## Advanced Usage
+
+### IP Configuration
+
+SRouter provides a flexible way to extract client IP addresses, which is particularly important when your application is behind a reverse proxy or load balancer. The IP configuration allows you to specify where to extract the client IP from and whether to trust proxy headers.
+
+```go
+// Configure IP extraction to use X-Forwarded-For header
+routerConfig := router.RouterConfig{
+    // ... other config
+    IPConfig: &middleware.IPConfig{
+        Source:     middleware.IPSourceXForwardedFor,
+        TrustProxy: true,
+    },
+}
+```
+
+#### IP Source Types
+
+SRouter supports several IP source types:
+
+1. **IPSourceRemoteAddr**: Uses the request's RemoteAddr field (default if no source is specified)
+2. **IPSourceXForwardedFor**: Uses the X-Forwarded-For header (common for most reverse proxies)
+3. **IPSourceXRealIP**: Uses the X-Real-IP header (used by Nginx and some other proxies)
+4. **IPSourceCustomHeader**: Uses a custom header specified in the configuration
+
+```go
+// Configure IP extraction to use a custom header
+routerConfig := router.RouterConfig{
+    // ... other config
+    IPConfig: &middleware.IPConfig{
+        Source:       middleware.IPSourceCustomHeader,
+        CustomHeader: "X-Client-IP",
+        TrustProxy:   true,
+    },
+}
+```
+
+#### Trust Proxy Setting
+
+The `TrustProxy` setting determines whether to trust proxy headers:
+
+- If `true`, the specified source will be used to extract the client IP
+- If `false` or if the specified source doesn't contain an IP, the request's RemoteAddr will be used as a fallback
+
+This is important for security, as malicious clients could potentially spoof headers if your application blindly trusts them.
+
+### Rate Limiting
+
+SRouter provides a flexible rate limiting system that can be configured at the global, sub-router, or route level. Rate limits can be based on IP address, authenticated user, or custom criteria.
+
+#### Rate Limiting Configuration
+
+```go
+// Create a router with global rate limiting
+routerConfig := router.RouterConfig{
+    // ... other config
+    GlobalRateLimit: &middleware.RateLimitConfig{
+        BucketName: "global",
+        Limit:      100,
+        Window:     time.Minute,
+        Strategy:   "ip",
+    },
+}
+
+// Create a sub-router with rate limiting
+subRouter := router.SubRouterConfig{
+    PathPrefix: "/api/v1",
+    RateLimitOverride: &middleware.RateLimitConfig{
+        BucketName: "api-v1",
+        Limit:      50,
+        Window:     time.Minute,
+        Strategy:   "ip",
+    },
+    // ... other config
+}
+
+// Create a route with rate limiting
+route := router.RouteConfigBase{
+    Path:    "/users",
+    Methods: []string{"POST"},
+    RateLimit: &middleware.RateLimitConfig{
+        BucketName: "create-user",
+        Limit:      10,
+        Window:     time.Minute,
+        Strategy:   "ip",
+    },
+    // ... other config
+}
+```
+
+#### Rate Limiting Strategies
+
+SRouter supports several rate limiting strategies:
+
+1. **IP-based Rate Limiting**: Limits requests based on the client's IP address (extracted according to the IP configuration).
+
+```go
+RateLimit: &middleware.RateLimitConfig{
+    BucketName: "ip-based",
+    Limit:      100,
+    Window:     time.Minute,
+    Strategy:   "ip",
+}
+```
+
+2. **User-based Rate Limiting**: Limits requests based on the authenticated user.
+
+```go
+RateLimit: &middleware.RateLimitConfig{
+    BucketName: "user-based",
+    Limit:      50,
+    Window:     time.Minute,
+    Strategy:   "user",
+}
+```
+
+3. **Custom Rate Limiting**: Limits requests based on custom criteria.
+
+```go
+RateLimit: &middleware.RateLimitConfig{
+    BucketName: "custom",
+    Limit:      20,
+    Window:     time.Minute,
+    Strategy:   "custom",
+    KeyExtractor: func(r *http.Request) (string, error) {
+        // Extract API key from query parameter
+        apiKey := r.URL.Query().Get("api_key")
+        if apiKey == "" {
+            // Fall back to IP if no API key is provided
+            return r.RemoteAddr, nil
+        }
+        return apiKey, nil
+    },
+}
+```
+
+#### Shared Rate Limit Buckets
+
+You can share rate limit buckets between different endpoints by using the same bucket name:
+
+```go
+// Login endpoint
+loginRoute := router.RouteConfigBase{
+    Path:    "/login",
+    Methods: []string{"POST"},
+    RateLimit: &middleware.RateLimitConfig{
+        BucketName: "auth-endpoints", // Shared bucket name
+        Limit:      5,
+        Window:     time.Minute,
+        Strategy:   "ip",
+    },
+    // ... other config
+}
+
+// Register endpoint
+registerRoute := router.RouteConfigBase{
+    Path:    "/register",
+    Methods: []string{"POST"},
+    RateLimit: &middleware.RateLimitConfig{
+        BucketName: "auth-endpoints", // Same bucket name as login
+        Limit:      5,
+        Window:     time.Minute,
+        Strategy:   "ip",
+    },
+    // ... other config
+}
+```
+
+#### Custom Rate Limit Responses
+
+You can customize the response sent when a rate limit is exceeded:
+
+```go
+RateLimit: &middleware.RateLimitConfig{
+    BucketName: "custom-response",
+    Limit:      10,
+    Window:     time.Minute,
+    Strategy:   "ip",
+    ExceededHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusTooManyRequests)
+        w.Write([]byte(`{"error":"Rate limit exceeded","message":"Please try again later"}`))
+    }),
+}
+```
+
+See the `examples/rate-limiting` directory for a complete example of rate limiting.
 
 ### Authentication
 

@@ -19,13 +19,14 @@ import (
 // Router is the main router struct that implements http.Handler.
 // It provides routing, middleware support, graceful shutdown, and other features.
 type Router struct {
-	config      RouterConfig
-	router      *httprouter.Router
-	logger      *zap.Logger
-	middlewares []common.Middleware
-	wg          sync.WaitGroup
-	shutdown    bool
-	shutdownMu  sync.RWMutex
+	config         RouterConfig
+	router         *httprouter.Router
+	logger         *zap.Logger
+	middlewares    []common.Middleware
+	rateLimitStore middleware.RateLimitStore
+	wg             sync.WaitGroup
+	shutdown       bool
+	shutdownMu     sync.RWMutex
 }
 
 // contextKey is a type for context keys.
@@ -56,13 +57,28 @@ func NewRouter(config RouterConfig) *Router {
 		}
 	}
 
+	// Create an in-memory rate limit store
+	rateLimitStore := middleware.NewInMemoryRateLimitStore()
+
+	// Start a background task to clean up expired rate limit entries
+	rateLimitStore.StartCleanupTask(10 * time.Minute)
+
 	// Create the router
 	r := &Router{
-		config:      config,
-		router:      hr,
-		logger:      logger,
-		middlewares: config.Middlewares,
+		config:         config,
+		router:         hr,
+		logger:         logger,
+		middlewares:    config.Middlewares,
+		rateLimitStore: rateLimitStore,
 	}
+
+	// Add IP middleware as the first middleware (before any other middleware)
+	// This ensures that the client IP is available in the request context for all other middleware
+	ipConfig := config.IPConfig
+	if ipConfig == nil {
+		ipConfig = middleware.DefaultIPConfig()
+	}
+	r.middlewares = append([]common.Middleware{middleware.ClientIPMiddleware(ipConfig)}, r.middlewares...)
 
 	// Add Prometheus middleware if configured
 	if config.PrometheusConfig != nil {
@@ -93,12 +109,13 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) {
 		// Create a full path by combining the sub-router prefix with the route path
 		fullPath := sr.PathPrefix + route.Path
 
-		// Get effective timeout and max body size for this route
+		// Get effective timeout, max body size, and rate limit for this route
 		timeout := r.getEffectiveTimeout(route.Timeout, sr.TimeoutOverride)
 		maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, sr.MaxBodySizeOverride)
+		rateLimit := r.getEffectiveRateLimit(route.RateLimit, sr.RateLimitOverride)
 
 		// Create a handler with all middlewares applied
-		handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, append(sr.Middlewares, route.Middlewares...))
+		handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, rateLimit, append(sr.Middlewares, route.Middlewares...))
 
 		// Register the route with httprouter
 		for _, method := range route.Methods {
@@ -111,12 +128,13 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) {
 // It creates a handler with all middlewares applied and registers it with the underlying httprouter.
 // For generic routes with type parameters, use RegisterGenericRoute function instead.
 func (r *Router) RegisterRoute(route RouteConfigBase) {
-	// Get effective timeout and max body size for this route
+	// Get effective timeout, max body size, and rate limit for this route
 	timeout := r.getEffectiveTimeout(route.Timeout, 0)
 	maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, 0)
+	rateLimit := r.getEffectiveRateLimit(route.RateLimit, nil)
 
 	// Create a handler with all middlewares applied
-	handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
+	handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, rateLimit, route.Middlewares)
 
 	// Register the route with httprouter
 	for _, method := range route.Methods {
@@ -129,9 +147,10 @@ func (r *Router) RegisterRoute(route RouteConfigBase) {
 // It creates a handler that uses the codec to decode the request and encode the response,
 // applies middleware, and registers the route with the router.
 func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) {
-	// Get effective timeout and max body size for this route
+	// Get effective timeout, max body size, and rate limit for this route
 	timeout := r.getEffectiveTimeout(route.Timeout, 0)
 	maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, 0)
+	rateLimit := r.getEffectiveRateLimit(route.RateLimit, nil)
 
 	// Create a handler that uses the codec to decode the request and encode the response
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -158,7 +177,7 @@ func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) {
 	})
 
 	// Create a handler with all middlewares applied
-	wrappedHandler := r.wrapHandler(handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
+	wrappedHandler := r.wrapHandler(handler, route.AuthLevel, timeout, maxBodySize, rateLimit, route.Middlewares)
 
 	// Register the route with httprouter
 	for _, method := range route.Methods {
@@ -180,9 +199,9 @@ func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Hand
 }
 
 // wrapHandler wraps a handler with all the necessary middleware.
-// It applies authentication, timeout, body size limits, and other middleware
+// It applies authentication, timeout, body size limits, rate limiting, and other middleware
 // to create a complete request processing pipeline.
-func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler {
+func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, rateLimit *middleware.RateLimitConfig, middlewares []Middleware) http.Handler {
 	// Create a handler that applies all the router's functionality
 	h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// First add to the wait group before checking shutdown status
@@ -263,6 +282,11 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, time
 		h = r.authOptionalMiddleware(h)
 	case NoAuth:
 		// No authentication middleware needed
+	}
+
+	// Apply rate limiting middleware if configured
+	if rateLimit != nil {
+		h = middleware.RateLimit(rateLimit, r.rateLimitStore, r.logger)(h)
 	}
 
 	// Apply route-specific middlewares
@@ -458,6 +482,18 @@ func (r *Router) getEffectiveMaxBodySize(routeMaxBodySize, subRouterMaxBodySize 
 		return subRouterMaxBodySize
 	}
 	return r.config.GlobalMaxBodySize
+}
+
+// getEffectiveRateLimit returns the effective rate limit for a route.
+// It considers route-specific, sub-router, and global rate limit settings in that order of precedence.
+func (r *Router) getEffectiveRateLimit(routeRateLimit, subRouterRateLimit *middleware.RateLimitConfig) *middleware.RateLimitConfig {
+	if routeRateLimit != nil {
+		return routeRateLimit
+	}
+	if subRouterRateLimit != nil {
+		return subRouterRateLimit
+	}
+	return r.config.GlobalRateLimit
 }
 
 // handleError handles an error by logging it and returning an appropriate HTTP response.
