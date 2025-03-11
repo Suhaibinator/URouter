@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,16 +13,214 @@ import (
 	"go.uber.org/zap"
 )
 
+// Define a custom context key type for user information
+type userContextKey struct{}
+
+// Define a user type
+type User struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Define request and response types
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Token string `json:"token"`
+	User  User   `json:"user"`
+}
+
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+// Mock user database
+var users = map[string]User{
+	"user1": {ID: "user1", Name: "User One"},
+	"user2": {ID: "user2", Name: "User Two"},
+}
+
+// Mock token database
+var tokens = map[string]string{
+	"token1": "user1",
+	"token2": "user2",
+}
+
+// Handler functions
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Simple mock authentication
+	var user User
+	var token string
+	if req.Username == "user1" && req.Password == "password1" {
+		user = users["user1"]
+		token = "token1"
+	} else if req.Username == "user2" && req.Password == "password2" {
+		user = users["user2"]
+		token = "token2"
+	} else {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	// Return the token and user
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(LoginResponse{
+		Token: token,
+		User:  user,
+	})
+}
+
+func userProfileHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the user from the context
+	user, ok := r.Context().Value(userContextKey{}).(User)
+	if !ok {
+		http.Error(w, "User not found in context", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the user profile
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(APIResponse{
+		Success: true,
+		Message: "User profile retrieved successfully",
+		Data:    user,
+	})
+}
+
+func publicEndpointHandler(w http.ResponseWriter, r *http.Request) {
+	// Return a public response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(APIResponse{
+		Success: true,
+		Message: "Public endpoint accessed successfully",
+		Data:    map[string]string{"info": "This is a public endpoint"},
+	})
+}
+
+// Custom authentication middleware
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get the token from the Authorization header
+		token := r.Header.Get("Authorization")
+		if token == "" {
+			http.Error(w, "Authorization header required", http.StatusUnauthorized)
+			return
+		}
+
+		// Remove the "Bearer " prefix if present
+		if len(token) > 7 && token[:7] == "Bearer " {
+			token = token[7:]
+		}
+
+		// Validate the token
+		userID, ok := tokens[token]
+		if !ok {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		// Get the user from the database
+		user, ok := users[userID]
+		if !ok {
+			http.Error(w, "User not found", http.StatusInternalServerError)
+			return
+		}
+
+		// Add the user to the context
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, userContextKey{}, user)
+
+		// Call the next handler with the updated context
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// Custom rate limit exceeded handler
+func rateLimitExceededHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	json.NewEncoder(w).Encode(APIResponse{
+		Success: false,
+		Message: "Rate limit exceeded. Please try again later.",
+	})
+}
+
 func main() {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	// Create a router configuration with global rate limiting and IP configuration
+	// Note: The router creates its own rate limiter internally
+
+	// Create auth subrouter
+	authSubrouter := router.SubRouterConfig{
+		PathPrefix: "/auth",
+		Routes: []router.RouteConfigBase{
+			{
+				Path:    "/login",
+				Methods: []string{"POST"},
+				// Strict rate limit for auth endpoints (shared bucket)
+				RateLimit: &middleware.RateLimitConfig{
+					BucketName:      "auth-endpoints",
+					Limit:           5,
+					Window:          time.Minute,
+					Strategy:        "ip",
+					ExceededHandler: http.HandlerFunc(rateLimitExceededHandler),
+				},
+				Handler: loginHandler,
+			},
+		},
+	}
+
+	// Create API subrouter
+	apiSubrouter := router.SubRouterConfig{
+		PathPrefix: "/api",
+		Routes: []router.RouteConfigBase{
+			{
+				Path:    "/profile",
+				Methods: []string{"GET"},
+				// User-based rate limiting
+				RateLimit: &middleware.RateLimitConfig{
+					BucketName: "user-profile",
+					Limit:      10,
+					Window:     time.Minute,
+					Strategy:   "user",
+				},
+				Middlewares: []router.Middleware{
+					authMiddleware,
+				},
+				Handler: userProfileHandler,
+			},
+			{
+				Path:    "/public",
+				Methods: []string{"GET"},
+				// IP-based rate limiting
+				RateLimit: &middleware.RateLimitConfig{
+					BucketName: "public-endpoints",
+					Limit:      20,
+					Window:     time.Minute,
+					Strategy:   "ip",
+				},
+				Handler: publicEndpointHandler,
+			},
+		},
+	}
+
+	// Create a router configuration with global rate limiting
 	routerConfig := router.RouterConfig{
-		Logger:            logger,
-		GlobalTimeout:     2 * time.Second,
-		GlobalMaxBodySize: 1 << 20, // 1 MB
+		Logger: logger,
+		// Global rate limit (applies to all routes)
 		GlobalRateLimit: &middleware.RateLimitConfig{
 			BucketName: "global",
 			Limit:      100,
@@ -32,166 +232,17 @@ func main() {
 			Source:     middleware.IPSourceXForwardedFor,
 			TrustProxy: true,
 		},
+		// Add subrouters to the configuration
+		SubRouters: []router.SubRouterConfig{
+			authSubrouter,
+			apiSubrouter,
+		},
 	}
 
 	// Create a router
 	r := router.NewRouter(routerConfig)
 
-	// Register a simple route with no specific rate limit (uses global)
-	r.RegisterRoute(router.RouteConfigBase{
-		Path:    "/hello",
-		Methods: []string{"GET"},
-		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message":"Hello, World!"}`))
-		},
-	})
-
-	// Register a route with a custom rate limit
-	r.RegisterRoute(router.RouteConfigBase{
-		Path:    "/limited",
-		Methods: []string{"GET"},
-		RateLimit: &middleware.RateLimitConfig{
-			BucketName: "limited-endpoint",
-			Limit:      5,
-			Window:     time.Minute,
-			Strategy:   "ip",
-		},
-		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message":"This endpoint is rate limited to 5 requests per minute"}`))
-		},
-	})
-
-	// Create a sub-router with its own rate limit
-	apiSubRouter := router.SubRouterConfig{
-		PathPrefix: "/api",
-		RateLimitOverride: &middleware.RateLimitConfig{
-			BucketName: "api",
-			Limit:      20,
-			Window:     time.Minute,
-			Strategy:   "ip",
-		},
-		Routes: []router.RouteConfigBase{
-			{
-				Path:    "/users",
-				Methods: []string{"GET"},
-				Handler: func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.Write([]byte(`{"users":["user1","user2","user3"]}`))
-				},
-			},
-			{
-				Path:    "/posts",
-				Methods: []string{"GET"},
-				Handler: func(w http.ResponseWriter, r *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					w.Write([]byte(`{"posts":["post1","post2","post3"]}`))
-				},
-			},
-		},
-	}
-
-	// Register the sub-router
-	for _, route := range apiSubRouter.Routes {
-		fullPath := apiSubRouter.PathPrefix + route.Path
-		routeConfig := route
-		routeConfig.Path = fullPath
-		r.RegisterRoute(routeConfig)
-	}
-
-	// Create routes that share the same rate limit bucket
-	r.RegisterRoute(router.RouteConfigBase{
-		Path:    "/auth/login",
-		Methods: []string{"POST"},
-		RateLimit: &middleware.RateLimitConfig{
-			BucketName: "auth-endpoints", // Shared bucket name
-			Limit:      3,
-			Window:     time.Minute,
-			Strategy:   "ip",
-		},
-		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message":"Login endpoint"}`))
-		},
-	})
-
-	r.RegisterRoute(router.RouteConfigBase{
-		Path:    "/auth/register",
-		Methods: []string{"POST"},
-		RateLimit: &middleware.RateLimitConfig{
-			BucketName: "auth-endpoints", // Same bucket name as login
-			Limit:      3,
-			Window:     time.Minute,
-			Strategy:   "ip",
-		},
-		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message":"Register endpoint"}`))
-		},
-	})
-
-	// Create a route with a custom key extractor
-	r.RegisterRoute(router.RouteConfigBase{
-		Path:    "/custom",
-		Methods: []string{"GET"},
-		RateLimit: &middleware.RateLimitConfig{
-			BucketName: "custom",
-			Limit:      10,
-			Window:     time.Minute,
-			Strategy:   "custom",
-			KeyExtractor: func(r *http.Request) (string, error) {
-				// Extract API key from query parameter
-				apiKey := r.URL.Query().Get("api_key")
-				if apiKey == "" {
-					// Fall back to IP if no API key is provided
-					return r.RemoteAddr, nil
-				}
-				return apiKey, nil
-			},
-		},
-		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message":"Custom rate limiting"}`))
-		},
-	})
-
-	// Create a route with a custom exceeded handler
-	r.RegisterRoute(router.RouteConfigBase{
-		Path:    "/custom-response",
-		Methods: []string{"GET"},
-		RateLimit: &middleware.RateLimitConfig{
-			BucketName: "custom-response",
-			Limit:      2,
-			Window:     time.Minute,
-			Strategy:   "ip",
-			ExceededHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte(`{"error":"Rate limit exceeded","message":"Please try again later"}`))
-			}),
-		},
-		Handler: func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"message":"Custom response for rate limiting"}`))
-		},
-	})
-
 	// Start the server
 	fmt.Println("Server listening on :8080")
-	fmt.Println("Try the following endpoints:")
-	fmt.Println("- GET /hello (global rate limit: 100 req/min)")
-	fmt.Println("- GET /limited (specific rate limit: 5 req/min)")
-	fmt.Println("- GET /api/users (sub-router rate limit: 20 req/min)")
-	fmt.Println("- GET /api/posts (sub-router rate limit: 20 req/min)")
-	fmt.Println("- POST /auth/login (shared bucket: 3 req/min combined with /auth/register)")
-	fmt.Println("- POST /auth/register (shared bucket: 3 req/min combined with /auth/login)")
-	fmt.Println("- GET /custom?api_key=your_key (custom key extractor: 10 req/min per API key)")
-	fmt.Println("- GET /custom-response (custom response: 2 req/min)")
-	fmt.Println("")
-	fmt.Println("Note: This example uses Uber's ratelimit library for smooth rate limiting")
-	fmt.Println("and is configured to use X-Forwarded-For header for client IP extraction.")
-	fmt.Println("You can test this by adding the X-Forwarded-For header to your requests:")
-	fmt.Println("curl -H \"X-Forwarded-For: 192.168.1.1\" http://localhost:8080/hello")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }

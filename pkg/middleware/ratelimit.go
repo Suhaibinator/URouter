@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -199,11 +200,39 @@ func extractUser(r *http.Request) string {
 	// Try to get the user from the context
 	// This is a simplified implementation that assumes the user is stored in the context
 	// In a real implementation, you would need to handle different user types
-	if user := r.Context().Value("user"); user != nil {
+	// We check for common context keys used for storing user information
+	var user interface{}
+
+	// Check for user in context with various common keys
+	for _, key := range []interface{}{
+		"user",                        // String key (common in many frameworks)
+		"user_context",                // Another common string key
+		struct{ name string }{"user"}, // Empty struct key with name field (used in some Go code)
+	} {
+		if u := r.Context().Value(key); u != nil {
+			user = u
+			break
+		}
+	}
+
+	if user != nil {
 		// Try to get the ID field using reflection
 		if userMap, ok := user.(map[string]interface{}); ok {
 			if id, ok := userMap["ID"]; ok {
-				return id.(string)
+				// Convert ID to string regardless of its type
+				switch v := id.(type) {
+				case string:
+					return v
+				case int:
+					return strconv.Itoa(v)
+				case float64:
+					return strconv.FormatFloat(v, 'f', -1, 64)
+				case bool:
+					return strconv.FormatBool(v)
+				default:
+					// For other types, try to use fmt.Sprint
+					return fmt.Sprint(v)
+				}
 			}
 		}
 	}
