@@ -3,7 +3,7 @@
 <html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<title>router: Go Coverage Report</title>
+		<title>auth-levels: Go Coverage Report</title>
 		<style>
 			body {
 				background: black;
@@ -55,7 +55,35 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/Suhaibinator/SRouter/pkg/router/router.go (96.0%)</option>
+				<option value="file0">github.com/Suhaibinator/SRouter/examples/auth-levels/main.go (0.0%)</option>
+				
+				<option value="file1">github.com/Suhaibinator/SRouter/examples/auth/main.go (0.0%)</option>
+				
+				<option value="file2">github.com/Suhaibinator/SRouter/examples/generic/main.go (0.0%)</option>
+				
+				<option value="file3">github.com/Suhaibinator/SRouter/examples/graceful-shutdown/main.go (0.0%)</option>
+				
+				<option value="file4">github.com/Suhaibinator/SRouter/examples/middleware/main.go (0.0%)</option>
+				
+				<option value="file5">github.com/Suhaibinator/SRouter/examples/prometheus/main.go (0.0%)</option>
+				
+				<option value="file6">github.com/Suhaibinator/SRouter/examples/simple/main.go (0.0%)</option>
+				
+				<option value="file7">github.com/Suhaibinator/SRouter/examples/subrouters/main.go (0.0%)</option>
+				
+				<option value="file8">github.com/Suhaibinator/SRouter/examples/user-auth/main.go (0.0%)</option>
+				
+				<option value="file9">github.com/Suhaibinator/SRouter/pkg/codec/json.go (100.0%)</option>
+				
+				<option value="file10">github.com/Suhaibinator/SRouter/pkg/codec/proto.go (93.3%)</option>
+				
+				<option value="file11">github.com/Suhaibinator/SRouter/pkg/middleware/auth.go (100.0%)</option>
+				
+				<option value="file12">github.com/Suhaibinator/SRouter/pkg/middleware/middleware.go (86.1%)</option>
+				
+				<option value="file13">github.com/Suhaibinator/SRouter/pkg/middleware/prometheus.go (96.8%)</option>
+				
+				<option value="file14">github.com/Suhaibinator/SRouter/pkg/router/router.go (97.8%)</option>
 				
 				</select>
 			</div>
@@ -69,7 +97,2679 @@
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">package router
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/middleware"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// User represents a user in the system
+type User struct {
+        ID    string
+        Name  string
+        Email string
+        Roles []string
+}
+
+// Handler for routes with no authentication
+func noAuthHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"This route does not require authentication"}`))
+}</span>
+
+// Handler for routes with optional authentication
+func optionalAuthHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+
+        // Try to get the user from the context
+        user := middleware.GetUser[User](r)
+        if user != nil </span><span class="cov0" title="0">{
+                // User is authenticated
+                fmt.Fprintf(w, `{"message":"Hello, %s! This route has optional authentication", "authenticated":true}`, user.Name)
+        }</span> else<span class="cov0" title="0"> {
+                // User is not authenticated
+                w.Write([]byte(`{"message":"This route has optional authentication", "authenticated":false}`))
+        }</span>
+}
+
+// Handler for routes with required authentication
+func requiredAuthHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+
+        // Get the user from the context
+        user := middleware.GetUser[User](r)
+        if user == nil </span><span class="cov0" title="0">{
+                // This should not happen since the middleware should have rejected the request
+                http.Error(w, "User not found in context", http.StatusInternalServerError)
+                return
+        }</span>
+
+        // User is authenticated
+        <span class="cov0" title="0">fmt.Fprintf(w, `{"message":"Hello, %s! This route requires authentication", "user_id":"%s", "email":"%s"}`,
+                user.Name, user.ID, user.Email)</span>
+}
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Mock user database
+        users := map[string]User{
+                "user1": {
+                        ID:    "1",
+                        Name:  "User One",
+                        Email: "user1@example.com",
+                        Roles: []string{"user"},
+                },
+                "user2": {
+                        ID:    "2",
+                        Name:  "User Two",
+                        Email: "user2@example.com",
+                        Roles: []string{"admin", "user"},
+                },
+        }
+
+        // Mock token to user mapping
+        tokens := map[string]string{
+                "token1": "user1",
+                "token2": "user2",
+        }
+
+        // Create a custom authentication function that returns a user
+        customUserAuth := func(r *http.Request) (*User, error) </span><span class="cov0" title="0">{
+                authHeader := r.Header.Get("Authorization")
+                if authHeader == "" </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("no authorization header")
+                }</span>
+
+                // Extract the token
+                <span class="cov0" title="0">token := authHeader[len("Bearer "):]
+
+                // Look up the username for this token
+                username, exists := tokens[token]
+                if !exists </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("invalid token")
+                }</span>
+
+                // Look up the user
+                <span class="cov0" title="0">user, exists := users[username]
+                if !exists </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("user not found")
+                }</span>
+
+                // Return a pointer to the user
+                <span class="cov0" title="0">return &amp;user, nil</span>
+        }
+
+        // Create a router configuration
+        <span class="cov0" title="0">routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     2 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+                SubRouters: []router.SubRouterConfig{
+                        {
+                                PathPrefix: "/auth-levels",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:      "/no-auth",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.NoAuth,
+                                                Handler:   noAuthHandler,
+                                        },
+                                        {
+                                                Path:      "/optional-auth",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.AuthOptional,
+                                                Middlewares: []router.Middleware{
+                                                        middleware.AuthenticationWithUser[User](customUserAuth),
+                                                },
+                                                Handler: optionalAuthHandler,
+                                        },
+                                        {
+                                                Path:      "/required-auth",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.AuthRequired,
+                                                Middlewares: []router.Middleware{
+                                                        middleware.AuthenticationWithUser[User](customUserAuth),
+                                                },
+                                                Handler: requiredAuthHandler,
+                                        },
+                                },
+                        },
+                },
+        }
+
+        // Create a router
+        r := router.NewRouter(routerConfig)
+
+        // Start the server
+        fmt.Println("Authentication Levels Example Server listening on :8080")
+        fmt.Println("Available endpoints:")
+        fmt.Println("  - GET /auth-levels/no-auth (no authentication required)")
+        fmt.Println("  - GET /auth-levels/optional-auth (authentication optional)")
+        fmt.Println("  - GET /auth-levels/required-auth (authentication required)")
+        fmt.Println("\nExample curl commands:")
+        fmt.Println("  curl http://localhost:8080/auth-levels/no-auth")
+        fmt.Println("  curl http://localhost:8080/auth-levels/optional-auth")
+        fmt.Println("  curl -H \"Authorization: Bearer token1\" http://localhost:8080/auth-levels/optional-auth")
+        fmt.Println("  curl -H \"Authorization: Bearer token1\" http://localhost:8080/auth-levels/required-auth")
+        log.Fatal(http.ListenAndServe(":8080", r))</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package main
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/middleware"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// Protected resource that requires authentication
+func protectedHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"This is a protected resource"}`))
+}</span>
+
+// Public resource that doesn't require authentication
+func publicHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"This is a public resource"}`))
+}</span>
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Define valid credentials for basic auth
+        basicAuthCredentials := map[string]string{
+                "user1": "password1",
+                "user2": "password2",
+        }
+
+        // Define valid tokens for bearer token auth
+        bearerTokens := map[string]bool{
+                "token1": true,
+                "token2": true,
+        }
+
+        // Define valid API keys
+        apiKeys := map[string]bool{
+                "key1": true,
+                "key2": true,
+        }
+
+        // Create authentication middlewares
+        basicAuthMiddleware := middleware.NewBasicAuthMiddleware(basicAuthCredentials, logger)
+        bearerTokenMiddleware := middleware.NewBearerTokenMiddleware(bearerTokens, logger)
+        apiKeyMiddleware := middleware.NewAPIKeyMiddleware(apiKeys, "X-API-Key", "api_key", logger)
+        customAuthMiddleware := middleware.Authentication(func(r *http.Request) bool </span><span class="cov0" title="0">{
+                return r.Header.Get("X-Custom-Auth") == "secret"
+        }</span>)
+
+        // Create a router configuration
+        <span class="cov0" title="0">routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     2 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+                SubRouters: []router.SubRouterConfig{
+                        {
+                                PathPrefix: "/public",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/resource",
+                                                Methods: []string{"GET"},
+                                                Handler: publicHandler,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/basic-auth",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:        "/resource",
+                                                Methods:     []string{"GET"},
+                                                Middlewares: []router.Middleware{basicAuthMiddleware},
+                                                Handler:     protectedHandler,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/bearer-auth",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:        "/resource",
+                                                Methods:     []string{"GET"},
+                                                Middlewares: []router.Middleware{bearerTokenMiddleware},
+                                                Handler:     protectedHandler,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/api-key-auth",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:        "/resource",
+                                                Methods:     []string{"GET"},
+                                                Middlewares: []router.Middleware{apiKeyMiddleware},
+                                                Handler:     protectedHandler,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/custom-auth",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:        "/resource",
+                                                Methods:     []string{"GET"},
+                                                Middlewares: []router.Middleware{customAuthMiddleware},
+                                                Handler:     protectedHandler,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/require-auth",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:      "/resource",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.AuthRequired, // Uses the default auth middleware
+                                                Handler:   protectedHandler,
+                                        },
+                                },
+                        },
+                },
+        }
+
+        // Create a router
+        r := router.NewRouter(routerConfig)
+
+        // Start the server
+        fmt.Println("Authentication Example Server listening on :8080")
+        fmt.Println("Available endpoints:")
+        fmt.Println("  - GET /public/resource (no auth required)")
+        fmt.Println("  - GET /basic-auth/resource (basic auth required)")
+        fmt.Println("  - GET /bearer-auth/resource (bearer token required)")
+        fmt.Println("  - GET /api-key-auth/resource (API key required)")
+        fmt.Println("  - GET /custom-auth/resource (custom auth required)")
+        fmt.Println("  - GET /require-auth/resource (default auth required)")
+        fmt.Println("\nExample curl commands:")
+        fmt.Println("  curl http://localhost:8080/public/resource")
+        fmt.Println("  curl -u user1:password1 http://localhost:8080/basic-auth/resource")
+        fmt.Println("  curl -H \"Authorization: Bearer token1\" http://localhost:8080/bearer-auth/resource")
+        fmt.Println("  curl -H \"X-API-Key: key1\" http://localhost:8080/api-key-auth/resource")
+        fmt.Println("  curl \"http://localhost:8080/api-key-auth/resource?api_key=key1\"")
+        fmt.Println("  curl -H \"X-Custom-Auth: secret\" http://localhost:8080/custom-auth/resource")
+        fmt.Println("  curl -H \"Authorization: Bearer token1\" http://localhost:8080/require-auth/resource")
+        log.Fatal(http.ListenAndServe(":8080", r))</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package main
+
+import (
+        "errors"
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/codec"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// User represents a user in our system
+type User struct {
+        ID    string `json:"id"`
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+// CreateUserRequest is the request body for creating a user
+type CreateUserRequest struct {
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+// CreateUserResponse is the response body for creating a user
+type CreateUserResponse struct {
+        ID    string `json:"id"`
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+// GetUserRequest is the request body for getting a user
+type GetUserRequest struct {
+        ID string `json:"id"`
+}
+
+// GetUserResponse is the response body for getting a user
+type GetUserResponse struct {
+        ID    string `json:"id"`
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+// UpdateUserRequest is the request body for updating a user
+type UpdateUserRequest struct {
+        ID    string `json:"id"`
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+// UpdateUserResponse is the response body for updating a user
+type UpdateUserResponse struct {
+        ID    string `json:"id"`
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+// DeleteUserRequest is the request body for deleting a user
+type DeleteUserRequest struct {
+        ID string `json:"id"`
+}
+
+// DeleteUserResponse is the response body for deleting a user
+type DeleteUserResponse struct {
+        Success bool   `json:"success"`
+        Message string `json:"message"`
+}
+
+// ListUsersRequest is the request body for listing users
+type ListUsersRequest struct {
+        Limit  int `json:"limit"`
+        Offset int `json:"offset"`
+}
+
+// ListUsersResponse is the response body for listing users
+type ListUsersResponse struct {
+        Users []User `json:"users"`
+        Total int    `json:"total"`
+}
+
+// In-memory user store
+var users = map[string]User{
+        "1": {ID: "1", Name: "John Doe", Email: "john@example.com"},
+        "2": {ID: "2", Name: "Jane Smith", Email: "jane@example.com"},
+        "3": {ID: "3", Name: "Bob Johnson", Email: "bob@example.com"},
+}
+
+// CreateUserHandler handles creating a user
+func CreateUserHandler(r *http.Request, req CreateUserRequest) (CreateUserResponse, error) <span class="cov0" title="0">{
+        // Validate request
+        if req.Name == "" </span><span class="cov0" title="0">{
+                return CreateUserResponse{}, router.NewHTTPError(http.StatusBadRequest, "Name is required")
+        }</span>
+        <span class="cov0" title="0">if req.Email == "" </span><span class="cov0" title="0">{
+                return CreateUserResponse{}, router.NewHTTPError(http.StatusBadRequest, "Email is required")
+        }</span>
+
+        // Generate a new ID (in a real app, this would be done by the database)
+        <span class="cov0" title="0">id := fmt.Sprintf("%d", len(users)+1)
+
+        // Create the user
+        user := User{
+                ID:    id,
+                Name:  req.Name,
+                Email: req.Email,
+        }
+
+        // Store the user
+        users[id] = user
+
+        // Return the response
+        return CreateUserResponse(user), nil</span>
+}
+
+// GetUserHandler handles getting a user
+func GetUserHandler(r *http.Request, req GetUserRequest) (GetUserResponse, error) <span class="cov0" title="0">{
+        // Get the user ID from the path parameter
+        id := router.GetParam(r, "id")
+        if id == "" </span><span class="cov0" title="0">{
+                return GetUserResponse{}, router.NewHTTPError(http.StatusBadRequest, "User ID is required")
+        }</span>
+
+        // Get the user
+        <span class="cov0" title="0">user, ok := users[id]
+        if !ok </span><span class="cov0" title="0">{
+                return GetUserResponse{}, router.NewHTTPError(http.StatusNotFound, "User not found")
+        }</span>
+
+        // Return the response
+        <span class="cov0" title="0">return GetUserResponse(user), nil</span>
+}
+
+// UpdateUserHandler handles updating a user
+func UpdateUserHandler(r *http.Request, req UpdateUserRequest) (UpdateUserResponse, error) <span class="cov0" title="0">{
+        // Get the user ID from the path parameter
+        id := router.GetParam(r, "id")
+        if id == "" </span><span class="cov0" title="0">{
+                return UpdateUserResponse{}, router.NewHTTPError(http.StatusBadRequest, "User ID is required")
+        }</span>
+
+        // Validate request
+        <span class="cov0" title="0">if req.Name == "" </span><span class="cov0" title="0">{
+                return UpdateUserResponse{}, router.NewHTTPError(http.StatusBadRequest, "Name is required")
+        }</span>
+        <span class="cov0" title="0">if req.Email == "" </span><span class="cov0" title="0">{
+                return UpdateUserResponse{}, router.NewHTTPError(http.StatusBadRequest, "Email is required")
+        }</span>
+
+        // Get the user
+        <span class="cov0" title="0">user, ok := users[id]
+        if !ok </span><span class="cov0" title="0">{
+                return UpdateUserResponse{}, router.NewHTTPError(http.StatusNotFound, "User not found")
+        }</span>
+
+        // Update the user
+        <span class="cov0" title="0">user.Name = req.Name
+        user.Email = req.Email
+        users[id] = user
+
+        // Return the response
+        return UpdateUserResponse(user), nil</span>
+}
+
+// DeleteUserHandler handles deleting a user
+func DeleteUserHandler(r *http.Request, req DeleteUserRequest) (DeleteUserResponse, error) <span class="cov0" title="0">{
+        // Get the user ID from the path parameter
+        id := router.GetParam(r, "id")
+        if id == "" </span><span class="cov0" title="0">{
+                return DeleteUserResponse{}, router.NewHTTPError(http.StatusBadRequest, "User ID is required")
+        }</span>
+
+        // Get the user
+        <span class="cov0" title="0">_, ok := users[id]
+        if !ok </span><span class="cov0" title="0">{
+                return DeleteUserResponse{}, router.NewHTTPError(http.StatusNotFound, "User not found")
+        }</span>
+
+        // Delete the user
+        <span class="cov0" title="0">delete(users, id)
+
+        // Return the response
+        return DeleteUserResponse{
+                Success: true,
+                Message: "User deleted successfully",
+        }, nil</span>
+}
+
+// ListUsersHandler handles listing users
+func ListUsersHandler(r *http.Request, req ListUsersRequest) (ListUsersResponse, error) <span class="cov0" title="0">{
+        // Default limit and offset
+        limit := req.Limit
+        if limit &lt;= 0 </span><span class="cov0" title="0">{
+                limit = 10
+        }</span>
+        <span class="cov0" title="0">offset := req.Offset
+        if offset &lt; 0 </span><span class="cov0" title="0">{
+                offset = 0
+        }</span>
+
+        // Get all users
+        <span class="cov0" title="0">var userList []User
+        for _, user := range users </span><span class="cov0" title="0">{
+                userList = append(userList, user)
+        }</span>
+
+        // Apply pagination
+        <span class="cov0" title="0">total := len(userList)
+        if offset &gt;= total </span><span class="cov0" title="0">{
+                return ListUsersResponse{
+                        Users: []User{},
+                        Total: total,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">end := offset + limit
+        if end &gt; total </span><span class="cov0" title="0">{
+                end = total
+        }</span>
+
+        // Return the response
+        <span class="cov0" title="0">return ListUsersResponse{
+                Users: userList[offset:end],
+                Total: total,
+        }, nil</span>
+}
+
+// EmptyRequest is an empty request body
+type EmptyRequest struct{}
+
+// ErrorResponse is a response body for errors
+type ErrorResponse struct {
+        Error string `json:"error"`
+}
+
+// ErrorHandler demonstrates returning an error from a handler
+func ErrorHandler(r *http.Request, req EmptyRequest) (ErrorResponse, error) <span class="cov0" title="0">{
+        return ErrorResponse{}, errors.New("this is a deliberate error")
+}</span>
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, err := zap.NewProduction()
+        if err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Failed to initialize logger: %v", err)
+        }</span>
+        <span class="cov0" title="0">defer func() </span><span class="cov0" title="0">{
+                if syncErr := logger.Sync(); syncErr != nil </span><span class="cov0" title="0">{
+                        // We can't use log.Fatalf here as it would exit the program
+                        // Just log the error since we're already in a defer
+                        log.Printf("Failed to sync logger: %v", syncErr)
+                }</span>
+        }()
+
+        // Create a router configuration
+        <span class="cov0" title="0">routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     2 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+        }
+
+        // Create a router
+        r := router.NewRouter(routerConfig)
+
+        // Register generic routes
+        router.RegisterGenericRoute(r, router.RouteConfig[CreateUserRequest, CreateUserResponse]{
+                Path:    "/users",
+                Methods: []string{"POST"},
+                Codec:   codec.NewJSONCodec[CreateUserRequest, CreateUserResponse](),
+                Handler: CreateUserHandler,
+        })
+
+        router.RegisterGenericRoute(r, router.RouteConfig[GetUserRequest, GetUserResponse]{
+                Path:    "/users/:id",
+                Methods: []string{"GET"},
+                Codec:   codec.NewJSONCodec[GetUserRequest, GetUserResponse](),
+                Handler: GetUserHandler,
+        })
+
+        router.RegisterGenericRoute(r, router.RouteConfig[UpdateUserRequest, UpdateUserResponse]{
+                Path:    "/users/:id",
+                Methods: []string{"PUT"},
+                Codec:   codec.NewJSONCodec[UpdateUserRequest, UpdateUserResponse](),
+                Handler: UpdateUserHandler,
+        })
+
+        router.RegisterGenericRoute(r, router.RouteConfig[DeleteUserRequest, DeleteUserResponse]{
+                Path:    "/users/:id",
+                Methods: []string{"DELETE"},
+                Codec:   codec.NewJSONCodec[DeleteUserRequest, DeleteUserResponse](),
+                Handler: DeleteUserHandler,
+        })
+
+        router.RegisterGenericRoute(r, router.RouteConfig[ListUsersRequest, ListUsersResponse]{
+                Path:    "/users",
+                Methods: []string{"GET"},
+                Codec:   codec.NewJSONCodec[ListUsersRequest, ListUsersResponse](),
+                Handler: ListUsersHandler,
+        })
+
+        router.RegisterGenericRoute(r, router.RouteConfig[EmptyRequest, ErrorResponse]{
+                Path:    "/error",
+                Methods: []string{"GET"},
+                Codec:   codec.NewJSONCodec[EmptyRequest, ErrorResponse](),
+                Handler: ErrorHandler,
+        })
+
+        // Start the server
+        fmt.Println("Generic Routes Example Server listening on :8080")
+        fmt.Println("Available endpoints:")
+        fmt.Println("  - POST /users (create a user)")
+        fmt.Println("  - GET /users/:id (get a user)")
+        fmt.Println("  - PUT /users/:id (update a user)")
+        fmt.Println("  - DELETE /users/:id (delete a user)")
+        fmt.Println("  - GET /users (list users)")
+        fmt.Println("  - GET /error (trigger an error)")
+        fmt.Println("\nExample curl commands:")
+        fmt.Println("  curl -X POST -H \"Content-Type: application/json\" -d '{\"name\":\"Alice\", \"email\":\"alice@example.com\"}' http://localhost:8080/users")
+        fmt.Println("  curl http://localhost:8080/users/1")
+        fmt.Println("  curl -X PUT -H \"Content-Type: application/json\" -d '{\"name\":\"Alice Updated\", \"email\":\"alice@example.com\"}' http://localhost:8080/users/1")
+        fmt.Println("  curl -X DELETE http://localhost:8080/users/1")
+        fmt.Println("  curl http://localhost:8080/users")
+        fmt.Println("  curl http://localhost:8080/error")
+        log.Fatal(http.ListenAndServe(":8080", r))</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package main
+
+import (
+        "context"
+        "fmt"
+        "log"
+        "net/http"
+        "os"
+        "os/signal"
+        "sync/atomic"
+        "syscall"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// Counter for active requests
+var activeRequests int32
+
+// SlowHandler is a handler that simulates a slow operation
+func SlowHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        // Increment active requests counter
+        atomic.AddInt32(&amp;activeRequests, 1)
+        defer atomic.AddInt32(&amp;activeRequests, -1)
+
+        // Get the duration from the query parameter
+        durationStr := r.URL.Query().Get("duration")
+        duration := 5 * time.Second // Default duration
+        if durationStr != "" </span><span class="cov0" title="0">{
+                var err error
+                parsedDuration, err := time.ParseDuration(durationStr)
+                if err == nil </span><span class="cov0" title="0">{
+                        duration = parsedDuration
+                }</span>
+        }
+
+        // Log the start of the request
+        <span class="cov0" title="0">fmt.Printf("Starting slow request with duration %s\n", duration)
+
+        // Simulate a slow operation
+        select </span>{
+        case &lt;-time.After(duration):<span class="cov0" title="0">
+                // Operation completed successfully
+                w.Header().Set("Content-Type", "application/json")
+                w.Write([]byte(`{"message":"Slow operation completed successfully"}`))
+                fmt.Println("Slow request completed")</span>
+        case &lt;-r.Context().Done():<span class="cov0" title="0">
+                // Request was canceled (e.g., due to timeout or shutdown)
+                fmt.Println("Slow request canceled")
+                return</span>
+        }
+}
+
+// QuickHandler is a handler that returns immediately
+func QuickHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"Quick operation completed"}`))
+}</span>
+
+// StatusHandler returns the current server status
+func StatusHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(fmt.Sprintf(`{"active_requests":%d}`, atomic.LoadInt32(&amp;activeRequests))))
+}</span>
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Create a router configuration
+        routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     30 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+        }
+
+        // Create a router
+        r := router.NewRouter(routerConfig)
+
+        // Register routes
+        r.RegisterRoute(router.RouteConfigBase{
+                Path:    "/slow",
+                Methods: []string{"GET"},
+                Handler: SlowHandler,
+        })
+
+        r.RegisterRoute(router.RouteConfigBase{
+                Path:    "/quick",
+                Methods: []string{"GET"},
+                Handler: QuickHandler,
+        })
+
+        r.RegisterRoute(router.RouteConfigBase{
+                Path:    "/status",
+                Methods: []string{"GET"},
+                Handler: StatusHandler,
+        })
+
+        // Create a server
+        srv := &amp;http.Server{
+                Addr:    ":8080",
+                Handler: r,
+        }
+
+        // Channel to listen for interrupt signals
+        stop := make(chan os.Signal, 1)
+        signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+        // Start the server in a goroutine
+        go func() </span><span class="cov0" title="0">{
+                fmt.Println("Graceful Shutdown Example Server listening on :8080")
+                fmt.Println("Available endpoints:")
+                fmt.Println("  - GET /slow?duration=5s (slow operation that takes the specified duration)")
+                fmt.Println("  - GET /quick (quick operation that returns immediately)")
+                fmt.Println("  - GET /status (returns the number of active requests)")
+                fmt.Println("\nExample curl commands:")
+                fmt.Println("  curl http://localhost:8080/slow?duration=10s")
+                fmt.Println("  curl http://localhost:8080/quick")
+                fmt.Println("  curl http://localhost:8080/status")
+                fmt.Println("\nPress Ctrl+C to initiate graceful shutdown")
+
+                if err := srv.ListenAndServe(); err != nil &amp;&amp; err != http.ErrServerClosed </span><span class="cov0" title="0">{
+                        log.Fatalf("listen: %s\n", err)
+                }</span>
+        }()
+
+        // Wait for interrupt signal
+        <span class="cov0" title="0">&lt;-stop
+        fmt.Println("\nShutdown signal received, initiating graceful shutdown...")
+
+        // Create a deadline for the shutdown
+        ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+        defer cancel()
+
+        // Shutdown the router first (this will stop accepting new requests)
+        fmt.Println("Shutting down router...")
+        if err := r.Shutdown(ctx); err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Router shutdown failed: %v", err)
+        }</span>
+
+        // Shutdown the server
+        <span class="cov0" title="0">fmt.Println("Shutting down server...")
+        if err := srv.Shutdown(ctx); err != nil </span><span class="cov0" title="0">{
+                log.Fatalf("Server shutdown failed: %v", err)
+        }</span>
+
+        // Wait for active requests to complete
+        <span class="cov0" title="0">for </span><span class="cov0" title="0">{
+                active := atomic.LoadInt32(&amp;activeRequests)
+                if active == 0 </span><span class="cov0" title="0">{
+                        break</span>
+                }
+                <span class="cov0" title="0">fmt.Printf("Waiting for %d active requests to complete...\n", active)
+                time.Sleep(1 * time.Second)</span>
+        }
+
+        <span class="cov0" title="0">fmt.Println("Server gracefully stopped")</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package main
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/common"
+        "github.com/Suhaibinator/SRouter/pkg/middleware"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// SimpleHandler is a simple handler that returns a message
+func SimpleHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"Hello, World!"}`))
+}</span>
+
+// RequestIDMiddleware adds a request ID to the response headers
+func RequestIDMiddleware() common.Middleware <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        // Generate a request ID (in a real app, use a UUID)
+                        requestID := fmt.Sprintf("req-%d", time.Now().UnixNano())
+
+                        // Add it to the response headers
+                        w.Header().Set("X-Request-ID", requestID)
+
+                        // Call the next handler
+                        next.ServeHTTP(w, r)
+
+                        // Log after the request is complete
+                        fmt.Printf("Request ID: %s completed\n", requestID)
+                }</span>)
+        }
+}
+
+// TimingMiddleware measures the time taken to process a request
+func TimingMiddleware() common.Middleware <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        // Record the start time
+                        start := time.Now()
+
+                        // Call the next handler
+                        next.ServeHTTP(w, r)
+
+                        // Calculate the duration
+                        duration := time.Since(start)
+
+                        // Log the duration
+                        fmt.Printf("Request to %s took %s\n", r.URL.Path, duration)
+                }</span>)
+        }
+}
+
+// HeadersMiddleware adds custom headers to the response
+func HeadersMiddleware(headers map[string]string) common.Middleware <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        // Add headers to the response
+                        for key, value := range headers </span><span class="cov0" title="0">{
+                                w.Header().Set(key, value)
+                        }</span>
+
+                        // Call the next handler
+                        <span class="cov0" title="0">next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+// RateLimitMiddleware implements a simple rate limiter
+func RateLimitMiddleware(requestsPerSecond int) common.Middleware <span class="cov0" title="0">{
+        // Create a channel to control the rate
+        ticker := time.NewTicker(time.Second / time.Duration(requestsPerSecond))
+        defer ticker.Stop()
+
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        // Wait for a token from the ticker
+                        &lt;-ticker.C
+
+                        // Call the next handler
+                        next.ServeHTTP(w, r)
+                }</span>)
+        }
+}
+
+// LoggingResponseWriter is a wrapper around http.ResponseWriter that captures the status code
+type LoggingResponseWriter struct {
+        http.ResponseWriter
+        statusCode int
+}
+
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader
+func (lrw *LoggingResponseWriter) WriteHeader(code int) <span class="cov0" title="0">{
+        lrw.statusCode = code
+        lrw.ResponseWriter.WriteHeader(code)
+}</span>
+
+// DetailedLoggingMiddleware logs detailed information about the request and response
+func DetailedLoggingMiddleware(logger *zap.Logger) common.Middleware <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        // Create a response writer that captures the status code
+                        lrw := &amp;LoggingResponseWriter{
+                                ResponseWriter: w,
+                                statusCode:     http.StatusOK, // Default status code
+                        }
+
+                        // Log the request
+                        logger.Info("Request received",
+                                zap.String("method", r.Method),
+                                zap.String("path", r.URL.Path),
+                                zap.String("remote_addr", r.RemoteAddr),
+                                zap.String("user_agent", r.UserAgent()),
+                        )
+
+                        // Call the next handler
+                        next.ServeHTTP(lrw, r)
+
+                        // Log the response
+                        logger.Info("Response sent",
+                                zap.String("method", r.Method),
+                                zap.String("path", r.URL.Path),
+                                zap.Int("status", lrw.statusCode),
+                        )
+                }</span>)
+        }
+}
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Create custom headers
+        customHeaders := map[string]string{
+                "X-Powered-By": "SRouter",
+                "X-Version":    "1.0.0",
+        }
+
+        // Create a router configuration with global middlewares
+        routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     2 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+                Middlewares: []common.Middleware{
+                        middleware.Recovery(logger),              // Recover from panics
+                        DetailedLoggingMiddleware(logger),        // Log detailed request/response info
+                        middleware.CORS([]string{"*"}, nil, nil), // Add CORS headers
+                        HeadersMiddleware(customHeaders),         // Add custom headers
+                        RequestIDMiddleware(),                    // Add request ID
+                        middleware.Timeout(1 * time.Second),      // Set timeout
+                        middleware.MaxBodySize(1 &lt;&lt; 20),          // Set max body size
+                },
+                SubRouters: []router.SubRouterConfig{
+                        {
+                                PathPrefix: "/api",
+                                Middlewares: []common.Middleware{
+                                        TimingMiddleware(), // Measure request time
+                                },
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/hello",
+                                                Methods: []string{"GET"},
+                                                Handler: SimpleHandler,
+                                        },
+                                        {
+                                                Path:    "/slow",
+                                                Methods: []string{"GET"},
+                                                Handler: func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                                                        // Simulate a slow operation
+                                                        time.Sleep(500 * time.Millisecond)
+                                                        w.Header().Set("Content-Type", "application/json")
+                                                        w.Write([]byte(`{"message":"Slow operation completed"}`))
+                                                }</span>,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/rate-limited",
+                                Middlewares: []common.Middleware{
+                                        RateLimitMiddleware(2), // Limit to 2 requests per second
+                                },
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/resource",
+                                                Methods: []string{"GET"},
+                                                Handler: SimpleHandler,
+                                        },
+                                },
+                        },
+                },
+        }
+
+        // Create a router
+        <span class="cov0" title="0">r := router.NewRouter(routerConfig)
+
+        // Register a route with route-specific middleware
+        r.RegisterRoute(router.RouteConfigBase{
+                Path:    "/custom",
+                Methods: []string{"GET"},
+                Middlewares: []common.Middleware{
+                        func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                                        fmt.Println("Route-specific middleware executed")
+                                        next.ServeHTTP(w, r)
+                                }</span>)
+                        },
+                },
+                Handler: SimpleHandler,
+        })
+
+        // Start the server
+        <span class="cov0" title="0">fmt.Println("Middleware Example Server listening on :8080")
+        fmt.Println("Available endpoints:")
+        fmt.Println("  - GET /api/hello (with timing middleware)")
+        fmt.Println("  - GET /api/slow (with timing middleware)")
+        fmt.Println("  - GET /rate-limited/resource (with rate limiting middleware)")
+        fmt.Println("  - GET /custom (with route-specific middleware)")
+        fmt.Println("\nExample curl commands:")
+        fmt.Println("  curl http://localhost:8080/api/hello")
+        fmt.Println("  curl http://localhost:8080/api/slow")
+        fmt.Println("  curl http://localhost:8080/rate-limited/resource")
+        fmt.Println("  curl http://localhost:8080/custom")
+        log.Fatal(http.ListenAndServe(":8080", r))</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package main
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/middleware"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// In a real application, you would use the prometheus client library
+// For this example, we'll just use a placeholder
+type PrometheusRegistry struct{}
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Create a Prometheus registry
+        // In a real application, you would use prometheus.NewRegistry()
+        promRegistry := &amp;PrometheusRegistry{}
+
+        // Create a router configuration with Prometheus metrics enabled
+        routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     2 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+                EnableMetrics:     true,
+                PrometheusConfig: &amp;router.PrometheusConfig{
+                        Registry:         promRegistry,
+                        Namespace:        "myapp",
+                        Subsystem:        "api",
+                        EnableLatency:    true,
+                        EnableThroughput: true,
+                        EnableQPS:        true,
+                        EnableErrors:     true,
+                },
+                SubRouters: []router.SubRouterConfig{
+                        {
+                                PathPrefix: "/api",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/hello",
+                                                Methods: []string{"GET"},
+                                                Handler: func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                                                        w.Header().Set("Content-Type", "application/json")
+                                                        w.Write([]byte(`{"message":"Hello, World!"}`))
+                                                }</span>,
+                                        },
+                                        {
+                                                Path:    "/error",
+                                                Methods: []string{"GET"},
+                                                Handler: func(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+                                                        http.Error(w, "Something went wrong", http.StatusInternalServerError)
+                                                }</span>,
+                                        },
+                                },
+                        },
+                },
+        }
+
+        // Create a router
+        <span class="cov0" title="0">r := router.NewRouter(routerConfig)
+
+        // Create a metrics handler
+        metricsHandler := middleware.PrometheusHandler(promRegistry)
+
+        // Create a mux to handle both the API and metrics endpoints
+        mux := http.NewServeMux()
+        mux.Handle("/metrics", metricsHandler)
+        mux.Handle("/", r)
+
+        // Start the server
+        fmt.Println("Server listening on :8080")
+        fmt.Println("API endpoints:")
+        fmt.Println("  - GET /api/hello")
+        fmt.Println("  - GET /api/error")
+        fmt.Println("Metrics endpoint:")
+        fmt.Println("  - GET /metrics")
+        log.Fatal(http.ListenAndServe(":8080", mux))</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package main
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/codec"
+        "github.com/Suhaibinator/SRouter/pkg/common"
+        "github.com/Suhaibinator/SRouter/pkg/middleware"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// Define request and response types for our generic handler
+type CreateUserReq struct {
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+type CreateUserResp struct {
+        ID    string `json:"id"`
+        Name  string `json:"name"`
+        Email string `json:"email"`
+}
+
+// HealthCheckHandler is a simple handler that returns a 200 OK
+func HealthCheckHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"status":"ok"}`))
+}</span>
+
+// CreateUserHandler is a generic handler that creates a user
+func CreateUserHandler(r *http.Request, req CreateUserReq) (CreateUserResp, error) <span class="cov0" title="0">{
+        // In a real application, you would create a user in a database
+        // For this example, we'll just return a mock response
+        return CreateUserResp{
+                ID:    "123",
+                Name:  req.Name,
+                Email: req.Email,
+        }, nil
+}</span>
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Create a router configuration
+        routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     2 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+                EnableMetrics:     true,
+                Middlewares: []common.Middleware{
+                        middleware.Logging(logger),
+                },
+                SubRouters: []router.SubRouterConfig{
+                        {
+                                PathPrefix:          "/api",
+                                TimeoutOverride:     3 * time.Second,
+                                MaxBodySizeOverride: 2 &lt;&lt; 20, // 2 MB
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:      "/health",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.NoAuth,
+                                                Handler:   HealthCheckHandler,
+                                        },
+                                },
+                        },
+                },
+        }
+
+        // Create a router
+        r := router.NewRouter(routerConfig)
+
+        // Register a generic JSON route
+        router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
+                Path:      "/api/users",
+                Methods:   []string{"POST"},
+                AuthLevel: router.AuthRequired,
+                Timeout:   3 * time.Second, // override
+                Codec:     codec.NewJSONCodec[CreateUserReq, CreateUserResp](),
+                Handler:   CreateUserHandler,
+        })
+
+        // Start the server
+        fmt.Println("Server listening on :8080")
+        log.Fatal(http.ListenAndServe(":8080", r))
+}</span>
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package main
+
+import (
+        "fmt"
+        "log"
+        "net/http"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/common"
+        "github.com/Suhaibinator/SRouter/pkg/middleware"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// API version 1 handlers
+func v1GetUsersHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"version":"v1","users":[{"id":1,"name":"John"},{"id":2,"name":"Jane"}]}`))
+}</span>
+
+func v1GetUserHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        id := router.GetParam(r, "id")
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(fmt.Sprintf(`{"version":"v1","user":{"id":%s,"name":"User %s"}}`, id, id)))
+}</span>
+
+func v1CreateUserHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"version":"v1","message":"User created","user":{"id":3,"name":"New User"}}`))
+}</span>
+
+// API version 2 handlers
+func v2GetUsersHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"version":"v2","data":{"users":[{"id":1,"name":"John","email":"john@example.com"},{"id":2,"name":"Jane","email":"jane@example.com"}]}}`))
+}</span>
+
+func v2GetUserHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        id := router.GetParam(r, "id")
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(fmt.Sprintf(`{"version":"v2","data":{"user":{"id":%s,"name":"User %s","email":"user%s@example.com"}}}`, id, id, id)))
+}</span>
+
+func v2CreateUserHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"version":"v2","data":{"message":"User created","user":{"id":3,"name":"New User","email":"newuser@example.com"}}}`))
+}</span>
+
+// Admin handlers
+func adminDashboardHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"Admin Dashboard"}`))
+}</span>
+
+func adminUsersHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"Admin Users"}`))
+}</span>
+
+func adminSettingsHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"Admin Settings"}`))
+}</span>
+
+// Public handlers
+func homeHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"Welcome to the home page"}`))
+}</span>
+
+func aboutHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"About us"}`))
+}</span>
+
+func contactHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"Contact us"}`))
+}</span>
+
+// Slow handler for demonstrating timeouts
+func slowHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        // Simulate a slow operation
+        time.Sleep(3 * time.Second)
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"This is a slow response"}`))
+}</span>
+
+// Large response handler for demonstrating body size limits
+func largeResponseHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+
+        // Generate a large response
+        response := `{"message":"This is a large response","data":"`
+        for i := 0; i &lt; 1024*1024; i++ </span><span class="cov0" title="0">{ // 1MB of data
+                response += "X"
+        }</span>
+        <span class="cov0" title="0">response += `"}`
+
+        w.Write([]byte(response))</span>
+}
+
+// Version middleware adds a version header
+func VersionMiddleware(version string) common.Middleware <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        w.Header().Set("X-API-Version", version)
+                        next.ServeHTTP(w, r)
+                }</span>)
+        }
+}
+
+// AdminAuthMiddleware checks if the user is an admin
+func AdminAuthMiddleware() common.Middleware <span class="cov0" title="0">{
+        return func(next http.Handler) http.Handler </span><span class="cov0" title="0">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                        // In a real app, you would check for admin credentials
+                        // For this example, we'll just check for an admin header
+                        if r.Header.Get("X-Admin-Auth") != "admin-secret" </span><span class="cov0" title="0">{
+                                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                                return
+                        }</span>
+                        <span class="cov0" title="0">next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Create a router configuration with sub-routers
+        routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     5 * time.Second,
+                GlobalMaxBodySize: 2 &lt;&lt; 20, // 2 MB
+                Middlewares: []common.Middleware{
+                        middleware.Recovery(logger),
+                        middleware.Logging(logger),
+                },
+                SubRouters: []router.SubRouterConfig{
+                        // API v1 sub-router
+                        {
+                                PathPrefix:      "/api/v1",
+                                TimeoutOverride: 2 * time.Second,
+                                Middlewares: []common.Middleware{
+                                        VersionMiddleware("1.0"),
+                                },
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/users",
+                                                Methods: []string{"GET"},
+                                                Handler: v1GetUsersHandler,
+                                        },
+                                        {
+                                                Path:    "/users/:id",
+                                                Methods: []string{"GET"},
+                                                Handler: v1GetUserHandler,
+                                        },
+                                        {
+                                                Path:    "/users",
+                                                Methods: []string{"POST"},
+                                                Handler: v1CreateUserHandler,
+                                        },
+                                        {
+                                                Path:    "/slow",
+                                                Methods: []string{"GET"},
+                                                Handler: slowHandler,
+                                        },
+                                },
+                        },
+                        // API v2 sub-router
+                        {
+                                PathPrefix:      "/api/v2",
+                                TimeoutOverride: 3 * time.Second,
+                                Middlewares: []common.Middleware{
+                                        VersionMiddleware("2.0"),
+                                },
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/users",
+                                                Methods: []string{"GET"},
+                                                Handler: v2GetUsersHandler,
+                                        },
+                                        {
+                                                Path:    "/users/:id",
+                                                Methods: []string{"GET"},
+                                                Handler: v2GetUserHandler,
+                                        },
+                                        {
+                                                Path:    "/users",
+                                                Methods: []string{"POST"},
+                                                Handler: v2CreateUserHandler,
+                                        },
+                                        {
+                                                Path:    "/slow",
+                                                Methods: []string{"GET"},
+                                                Handler: slowHandler,
+                                                Timeout: 4 * time.Second, // Override sub-router timeout
+                                        },
+                                },
+                        },
+                        // Admin sub-router
+                        {
+                                PathPrefix:          "/admin",
+                                MaxBodySizeOverride: 5 &lt;&lt; 20, // 5 MB
+                                Middlewares: []common.Middleware{
+                                        AdminAuthMiddleware(),
+                                },
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/dashboard",
+                                                Methods: []string{"GET"},
+                                                Handler: adminDashboardHandler,
+                                        },
+                                        {
+                                                Path:    "/users",
+                                                Methods: []string{"GET"},
+                                                Handler: adminUsersHandler,
+                                        },
+                                        {
+                                                Path:    "/settings",
+                                                Methods: []string{"GET"},
+                                                Handler: adminSettingsHandler,
+                                        },
+                                        {
+                                                Path:    "/large",
+                                                Methods: []string{"GET"},
+                                                Handler: largeResponseHandler,
+                                        },
+                                },
+                        },
+                        // Public sub-router
+                        {
+                                PathPrefix: "/",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:    "/",
+                                                Methods: []string{"GET"},
+                                                Handler: homeHandler,
+                                        },
+                                        {
+                                                Path:    "/about",
+                                                Methods: []string{"GET"},
+                                                Handler: aboutHandler,
+                                        },
+                                        {
+                                                Path:    "/contact",
+                                                Methods: []string{"GET"},
+                                                Handler: contactHandler,
+                                        },
+                                },
+                        },
+                },
+        }
+
+        // Create a router
+        r := router.NewRouter(routerConfig)
+
+        // Start the server
+        fmt.Println("Sub-Routers Example Server listening on :8080")
+        fmt.Println("Available endpoints:")
+        fmt.Println("API v1 (timeout: 2s):")
+        fmt.Println("  - GET /api/v1/users")
+        fmt.Println("  - GET /api/v1/users/:id")
+        fmt.Println("  - POST /api/v1/users")
+        fmt.Println("  - GET /api/v1/slow (will timeout)")
+        fmt.Println("API v2 (timeout: 3s):")
+        fmt.Println("  - GET /api/v2/users")
+        fmt.Println("  - GET /api/v2/users/:id")
+        fmt.Println("  - POST /api/v2/users")
+        fmt.Println("  - GET /api/v2/slow (timeout: 4s)")
+        fmt.Println("Admin (requires X-Admin-Auth header):")
+        fmt.Println("  - GET /admin/dashboard")
+        fmt.Println("  - GET /admin/users")
+        fmt.Println("  - GET /admin/settings")
+        fmt.Println("  - GET /admin/large")
+        fmt.Println("Public:")
+        fmt.Println("  - GET /")
+        fmt.Println("  - GET /about")
+        fmt.Println("  - GET /contact")
+        fmt.Println("\nExample curl commands:")
+        fmt.Println("  curl http://localhost:8080/api/v1/users")
+        fmt.Println("  curl http://localhost:8080/api/v1/users/1")
+        fmt.Println("  curl -X POST http://localhost:8080/api/v1/users")
+        fmt.Println("  curl http://localhost:8080/api/v1/slow")
+        fmt.Println("  curl http://localhost:8080/api/v2/users")
+        fmt.Println("  curl http://localhost:8080/api/v2/slow")
+        fmt.Println("  curl -H \"X-Admin-Auth: admin-secret\" http://localhost:8080/admin/dashboard")
+        fmt.Println("  curl http://localhost:8080/")
+        log.Fatal(http.ListenAndServe(":8080", r))
+}</span>
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package main
+
+import (
+        "errors"
+        "fmt"
+        "log"
+        "net/http"
+        "strings"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/middleware"
+        "github.com/Suhaibinator/SRouter/pkg/router"
+        "go.uber.org/zap"
+)
+
+// User represents a user in the system
+type User struct {
+        ID    string
+        Name  string
+        Email string
+        Roles []string
+}
+
+// Protected resource that requires authentication and uses the user object
+func protectedUserHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        // Get the user from the context
+        user := middleware.GetUser[User](r)
+        if user == nil </span><span class="cov0" title="0">{
+                http.Error(w, "User not found in context", http.StatusInternalServerError)
+                return
+        }</span>
+
+        <span class="cov0" title="0">w.Header().Set("Content-Type", "application/json")
+        fmt.Fprintf(w, `{"message":"Hello, %s! This is a protected resource", "user_id":"%s", "email":"%s", "roles":["%s"]}`,
+                user.Name, user.ID, user.Email, strings.Join(user.Roles, `","`))</span>
+}
+
+// Protected resource that requires authentication but doesn't use the user object
+func protectedHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"This is a protected resource"}`))
+}</span>
+
+// Public resource that doesn't require authentication
+func publicHandler(w http.ResponseWriter, r *http.Request) <span class="cov0" title="0">{
+        w.Header().Set("Content-Type", "application/json")
+        w.Write([]byte(`{"message":"This is a public resource"}`))
+}</span>
+
+func main() <span class="cov0" title="0">{
+        // Create a logger
+        logger, _ := zap.NewProduction()
+        defer logger.Sync()
+
+        // Mock user database
+        users := map[string]User{
+                "user1": {
+                        ID:    "1",
+                        Name:  "User One",
+                        Email: "user1@example.com",
+                        Roles: []string{"user"},
+                },
+                "user2": {
+                        ID:    "2",
+                        Name:  "User Two",
+                        Email: "user2@example.com",
+                        Roles: []string{"admin", "user"},
+                },
+        }
+
+        // Mock token to user mapping
+        tokens := map[string]string{
+                "token1": "user1",
+                "token2": "user2",
+        }
+
+        // Create a custom authentication function that returns a user
+        customUserAuth := func(r *http.Request) (*User, error) </span><span class="cov0" title="0">{
+                authHeader := r.Header.Get("Authorization")
+                if authHeader == "" </span><span class="cov0" title="0">{
+                        return nil, errors.New("no authorization header")
+                }</span>
+
+                // Extract the token
+                <span class="cov0" title="0">token := strings.TrimPrefix(authHeader, "Bearer ")
+
+                // Look up the username for this token
+                username, exists := tokens[token]
+                if !exists </span><span class="cov0" title="0">{
+                        return nil, errors.New("invalid token")
+                }</span>
+
+                // Look up the user
+                <span class="cov0" title="0">user, exists := users[username]
+                if !exists </span><span class="cov0" title="0">{
+                        return nil, errors.New("user not found")
+                }</span>
+
+                // Return a pointer to the user
+                <span class="cov0" title="0">return &amp;user, nil</span>
+        }
+
+        // Create a bearer token authentication function that returns a user
+        <span class="cov0" title="0">bearerTokenUserAuth := func(token string) (*User, error) </span><span class="cov0" title="0">{
+                // Look up the username for this token
+                username, exists := tokens[token]
+                if !exists </span><span class="cov0" title="0">{
+                        return nil, errors.New("invalid token")
+                }</span>
+
+                // Look up the user
+                <span class="cov0" title="0">user, exists := users[username]
+                if !exists </span><span class="cov0" title="0">{
+                        return nil, errors.New("user not found")
+                }</span>
+
+                // Return a pointer to the user
+                <span class="cov0" title="0">return &amp;user, nil</span>
+        }
+
+        // Create a basic auth function that returns a user
+        <span class="cov0" title="0">basicAuthUserFunc := func(username, password string) (*User, error) </span><span class="cov0" title="0">{
+                // In a real application, you would validate the password
+                // For this example, we'll just check if the user exists and the password is "password"
+                user, exists := users[username]
+                if !exists || password != "password" </span><span class="cov0" title="0">{
+                        return nil, errors.New("invalid credentials")
+                }</span>
+
+                // Return a pointer to the user
+                <span class="cov0" title="0">return &amp;user, nil</span>
+        }
+
+        // Create a router configuration
+        <span class="cov0" title="0">routerConfig := router.RouterConfig{
+                Logger:            logger,
+                GlobalTimeout:     2 * time.Second,
+                GlobalMaxBodySize: 1 &lt;&lt; 20, // 1 MB
+                SubRouters: []router.SubRouterConfig{
+                        {
+                                PathPrefix: "/public",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:      "/resource",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.NoAuth,
+                                                Handler:   publicHandler,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/boolean-auth",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:      "/resource",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.AuthRequired,
+                                                Middlewares: []router.Middleware{
+                                                        middleware.Authentication(func(r *http.Request) bool </span><span class="cov0" title="0">{
+                                                                // Simple boolean authentication
+                                                                authHeader := r.Header.Get("Authorization")
+                                                                if authHeader == "" </span><span class="cov0" title="0">{
+                                                                        return false
+                                                                }</span>
+                                                                <span class="cov0" title="0">token := strings.TrimPrefix(authHeader, "Bearer ")
+                                                                _, exists := tokens[token]
+                                                                return exists</span>
+                                                        }),
+                                                },
+                                                Handler: protectedHandler,
+                                        },
+                                },
+                        },
+                        {
+                                PathPrefix: "/user-auth",
+                                Routes: []router.RouteConfigBase{
+                                        {
+                                                Path:      "/custom",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.AuthRequired,
+                                                Middlewares: []router.Middleware{
+                                                        middleware.AuthenticationWithUser[User](customUserAuth),
+                                                },
+                                                Handler: protectedUserHandler,
+                                        },
+                                        {
+                                                Path:      "/bearer",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.AuthRequired,
+                                                Middlewares: []router.Middleware{
+                                                        middleware.NewBearerTokenWithUserMiddleware[User](bearerTokenUserAuth, logger),
+                                                },
+                                                Handler: protectedUserHandler,
+                                        },
+                                        {
+                                                Path:      "/basic",
+                                                Methods:   []string{"GET"},
+                                                AuthLevel: router.AuthRequired,
+                                                Middlewares: []router.Middleware{
+                                                        middleware.NewBasicAuthWithUserMiddleware[User](basicAuthUserFunc, logger),
+                                                },
+                                                Handler: protectedUserHandler,
+                                        },
+                                },
+                        },
+                },
+        }
+
+        // Create a router
+        <span class="cov0" title="0">r := router.NewRouter(routerConfig)
+
+        // Start the server
+        fmt.Println("User Authentication Example Server listening on :8080")
+        fmt.Println("Available endpoints:")
+        fmt.Println("  - GET /public/resource (no auth required)")
+        fmt.Println("  - GET /boolean-auth/resource (boolean auth required)")
+        fmt.Println("  - GET /user-auth/custom (custom user auth)")
+        fmt.Println("  - GET /user-auth/bearer (bearer token user auth)")
+        fmt.Println("  - GET /user-auth/basic (basic user auth)")
+        fmt.Println("\nExample curl commands:")
+        fmt.Println("  curl http://localhost:8080/public/resource")
+        fmt.Println("  curl -H \"Authorization: Bearer token1\" http://localhost:8080/boolean-auth/resource")
+        fmt.Println("  curl -H \"Authorization: Bearer token1\" http://localhost:8080/user-auth/custom")
+        fmt.Println("  curl -H \"Authorization: Bearer token2\" http://localhost:8080/user-auth/bearer")
+        fmt.Println("  curl -u user1:password http://localhost:8080/user-auth/basic")
+        log.Fatal(http.ListenAndServe(":8080", r))</span>
+}
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">// Package codec provides encoding and decoding functionality for different data formats.
+package codec
+
+import (
+        "encoding/json"
+        "io"
+        "net/http"
+)
+
+// JSONCodec is a codec that uses JSON for marshaling and unmarshaling.
+// It implements the Codec interface for encoding responses and decoding requests.
+type JSONCodec[T any, U any] struct {
+        // Optional configuration for JSON encoding/decoding
+        // For example, custom field naming strategies, etc.
+}
+
+// Decode decodes the request body into a value of type T.
+// It reads the entire request body and unmarshals it from JSON.
+func (c *JSONCodec[T, U]) Decode(r *http.Request) (T, error) <span class="cov8" title="1">{
+        var data T
+
+        // Read the request body
+        body, err := io.ReadAll(r.Body)
+        if err != nil </span><span class="cov8" title="1">{
+                return data, err
+        }</span>
+        <span class="cov8" title="1">defer r.Body.Close()
+
+        // Unmarshal the JSON
+        err = json.Unmarshal(body, &amp;data)
+        if err != nil </span><span class="cov8" title="1">{
+                return data, err
+        }</span>
+
+        <span class="cov8" title="1">return data, nil</span>
+}
+
+// Encode encodes a value of type U into the response.
+// It marshals the value to JSON and writes it to the response with the appropriate content type.
+func (c *JSONCodec[T, U]) Encode(w http.ResponseWriter, resp U) error <span class="cov8" title="1">{
+        // Set the content type
+        w.Header().Set("Content-Type", "application/json")
+
+        // Marshal the response
+        body, err := json.Marshal(resp)
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        // Write the response
+        <span class="cov8" title="1">_, err = w.Write(body)
+        return err</span>
+}
+
+// NewJSONCodec creates a new JSONCodec instance for the specified types.
+// T represents the request type and U represents the response type.
+func NewJSONCodec[T any, U any]() *JSONCodec[T, U] <span class="cov8" title="1">{
+        return &amp;JSONCodec[T, U]{}
+}</span>
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">// Package codec provides encoding and decoding functionality for different data formats.
+package codec
+
+import (
+        "errors"
+        "io"
+        "net/http"
+        "reflect"
+)
+
+// ProtoCodec is a codec that uses Protocol Buffers for marshaling and unmarshaling.
+// This is a basic implementation that requires the types T and U to implement
+// the proto.Message interface and have Marshal/Unmarshal methods.
+// It implements the Codec interface for encoding responses and decoding requests.
+type ProtoCodec[T any, U any] struct {
+        // Optional configuration for Proto encoding/decoding
+}
+
+// Decode decodes the request body into a value of type T.
+// It reads the entire request body and unmarshals it from Protocol Buffers format.
+// The type T must implement the Unmarshal method.
+func (c *ProtoCodec[T, U]) Decode(r *http.Request) (T, error) <span class="cov8" title="1">{
+        var data T
+
+        // Create a new instance of T
+        dataValue := reflect.New(reflect.TypeOf(data).Elem()).Interface()
+
+        // Check if dataValue implements proto.Message
+        protoMsg, ok := dataValue.(interface {
+                Unmarshal([]byte) error
+        })
+        if !ok </span><span class="cov8" title="1">{
+                var zero T
+                return zero, errors.New("type T does not implement Unmarshal method")
+        }</span>
+
+        // Read the request body
+        <span class="cov8" title="1">body, err := io.ReadAll(r.Body)
+        if err != nil </span><span class="cov8" title="1">{
+                var zero T
+                return zero, err
+        }</span>
+        <span class="cov8" title="1">defer r.Body.Close()
+
+        // Unmarshal the proto
+        err = protoMsg.Unmarshal(body)
+        if err != nil </span><span class="cov8" title="1">{
+                var zero T
+                return zero, err
+        }</span>
+
+        // Convert back to T
+        <span class="cov8" title="1">result, ok := dataValue.(T)
+        if !ok </span><span class="cov0" title="0">{
+                var zero T
+                return zero, errors.New("failed to convert unmarshaled data to type T")
+        }</span>
+
+        <span class="cov8" title="1">return result, nil</span>
+}
+
+// Encode encodes a value of type U into the response.
+// It marshals the value to Protocol Buffers format and writes it to the response
+// with the appropriate content type. The type U must implement the Marshal method.
+func (c *ProtoCodec[T, U]) Encode(w http.ResponseWriter, resp U) error <span class="cov8" title="1">{
+        // Check if resp implements proto.Message
+        protoMsg, ok := interface{}(resp).(interface {
+                Marshal() ([]byte, error)
+        })
+        if !ok </span><span class="cov8" title="1">{
+                return errors.New("type U does not implement Marshal method")
+        }</span>
+
+        // Set the content type
+        <span class="cov8" title="1">w.Header().Set("Content-Type", "application/x-protobuf")
+
+        // Marshal the response
+        body, err := protoMsg.Marshal()
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        // Write the response
+        <span class="cov8" title="1">_, err = w.Write(body)
+        return err</span>
+}
+
+// NewProtoCodec creates a new ProtoCodec instance for the specified types.
+// T represents the request type and U represents the response type.
+// Both types must implement the appropriate Protocol Buffers methods.
+func NewProtoCodec[T any, U any]() *ProtoCodec[T, U] <span class="cov8" title="1">{
+        return &amp;ProtoCodec[T, U]{}
+}</span>
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">// Package middleware provides a collection of HTTP middleware components for the SRouter framework.
+package middleware
+
+import (
+        "context"
+        "errors"
+        "net/http"
+        "reflect"
+        "strings"
+
+        "github.com/Suhaibinator/SRouter/pkg/common"
+        "go.uber.org/zap"
+)
+
+// AuthProvider defines an interface for authentication providers.
+// Different authentication mechanisms can implement this interface
+// to be used with the AuthenticationWithProvider middleware.
+// The framework includes several implementations: BasicAuthProvider,
+// BearerTokenProvider, and APIKeyProvider.
+type AuthProvider interface {
+        // Authenticate authenticates a request and returns true if authentication is successful.
+        // It examines the request for authentication credentials (such as headers, cookies, or query parameters)
+        // and validates them according to the provider's implementation.
+        // Returns true if the request is authenticated, false otherwise.
+        Authenticate(r *http.Request) bool
+}
+
+// BasicAuthProvider provides HTTP Basic Authentication.
+// It validates username and password credentials against a predefined map.
+type BasicAuthProvider struct {
+        Credentials map[string]string // username -&gt; password
+}
+
+// Authenticate authenticates a request using HTTP Basic Authentication.
+// It extracts the username and password from the Authorization header
+// and validates them against the stored credentials.
+// Returns true if authentication is successful, false otherwise.
+func (p *BasicAuthProvider) Authenticate(r *http.Request) bool <span class="cov8" title="1">{
+        username, password, ok := r.BasicAuth()
+        if !ok </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">expectedPassword, exists := p.Credentials[username]
+        if !exists </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return password == expectedPassword</span>
+}
+
+// BearerTokenProvider provides Bearer Token Authentication.
+// It can validate tokens against a predefined map or using a custom validator function.
+type BearerTokenProvider struct {
+        ValidTokens map[string]bool         // token -&gt; valid
+        Validator   func(token string) bool // optional token validator
+}
+
+// Authenticate authenticates a request using Bearer Token Authentication.
+// It extracts the token from the Authorization header and validates it
+// using either the validator function (if provided) or the ValidTokens map.
+// Returns true if authentication is successful, false otherwise.
+func (p *BearerTokenProvider) Authenticate(r *http.Request) bool <span class="cov8" title="1">{
+        authHeader := r.Header.Get("Authorization")
+        if authHeader == "" </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        // Check if the header starts with "Bearer "
+        <span class="cov8" title="1">if !strings.HasPrefix(authHeader, "Bearer ") </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        // Extract the token
+        <span class="cov8" title="1">token := strings.TrimPrefix(authHeader, "Bearer ")
+
+        // If a validator is provided, use it
+        if p.Validator != nil </span><span class="cov8" title="1">{
+                return p.Validator(token)
+        }</span>
+
+        // Otherwise, check if the token is in the valid tokens map
+        <span class="cov8" title="1">return p.ValidTokens[token]</span>
+}
+
+// APIKeyProvider provides API Key Authentication.
+// It can validate API keys provided in a header or query parameter.
+type APIKeyProvider struct {
+        ValidKeys map[string]bool // key -&gt; valid
+        Header    string          // header name (e.g., "X-API-Key")
+        Query     string          // query parameter name (e.g., "api_key")
+}
+
+// Authenticate authenticates a request using API Key Authentication.
+// It checks for the API key in either the specified header or query parameter
+// and validates it against the stored valid keys.
+// Returns true if authentication is successful, false otherwise.
+func (p *APIKeyProvider) Authenticate(r *http.Request) bool <span class="cov8" title="1">{
+        // Check header
+        if p.Header != "" </span><span class="cov8" title="1">{
+                key := r.Header.Get(p.Header)
+                if key != "" &amp;&amp; p.ValidKeys[key] </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+
+        // Check query parameter
+        <span class="cov8" title="1">if p.Query != "" </span><span class="cov8" title="1">{
+                key := r.URL.Query().Get(p.Query)
+                if key != "" &amp;&amp; p.ValidKeys[key] </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+
+        <span class="cov8" title="1">return false</span>
+}
+
+// AuthenticationWithProvider is a middleware that checks if a request is authenticated
+// using the provided auth provider. If authentication fails, it returns a 401 Unauthorized response.
+// This middleware allows for flexible authentication mechanisms by accepting any AuthProvider implementation.
+func AuthenticationWithProvider(provider AuthProvider, logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Check if the request is authenticated
+                        if !provider.Authenticate(r) </span><span class="cov8" title="1">{
+                                logger.Warn("Authentication failed",
+                                        zap.String("method", r.Method),
+                                        zap.String("path", r.URL.Path),
+                                        zap.String("remote_addr", r.RemoteAddr),
+                                )
+                                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // If authentication is successful, call the next handler
+                        <span class="cov8" title="1">next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+// Authentication is a middleware that checks if a request is authenticated using a simple auth function.
+// This is a convenience wrapper around AuthenticationWithProvider for backward compatibility.
+// It allows for custom authentication logic to be provided as a simple function.
+func Authentication(authFunc func(*http.Request) bool) common.Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Check if the request is authenticated
+                        if !authFunc(r) </span><span class="cov8" title="1">{
+                                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // If authentication is successful, call the next handler
+                        <span class="cov8" title="1">next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+// NewBasicAuthMiddleware creates a middleware that uses HTTP Basic Authentication.
+// It takes a map of username to password credentials and a logger for authentication failures.
+func NewBasicAuthMiddleware(credentials map[string]string, logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        provider := &amp;BasicAuthProvider{
+                Credentials: credentials,
+        }
+        return AuthenticationWithProvider(provider, logger)
+}</span>
+
+// NewBearerTokenMiddleware creates a middleware that uses Bearer Token Authentication.
+// It takes a map of valid tokens and a logger for authentication failures.
+func NewBearerTokenMiddleware(validTokens map[string]bool, logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        provider := &amp;BearerTokenProvider{
+                ValidTokens: validTokens,
+        }
+        return AuthenticationWithProvider(provider, logger)
+}</span>
+
+// NewBearerTokenValidatorMiddleware creates a middleware that uses Bearer Token Authentication
+// with a custom validator function. This allows for more complex token validation logic,
+// such as JWT validation or integration with external authentication services.
+func NewBearerTokenValidatorMiddleware(validator func(string) bool, logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        provider := &amp;BearerTokenProvider{
+                Validator: validator,
+        }
+        return AuthenticationWithProvider(provider, logger)
+}</span>
+
+// NewAPIKeyMiddleware creates a middleware that uses API Key Authentication.
+// It takes a map of valid API keys, the header and query parameter names to check,
+// and a logger for authentication failures.
+func NewAPIKeyMiddleware(validKeys map[string]bool, header, query string, logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        provider := &amp;APIKeyProvider{
+                ValidKeys: validKeys,
+                Header:    header,
+                Query:     query,
+        }
+        return AuthenticationWithProvider(provider, logger)
+}</span>
+
+// UserAuthProvider defines an interface for authentication providers that return a user object.
+// Different authentication mechanisms can implement this interface
+// to be used with the AuthenticationWithUserProvider middleware.
+type UserAuthProvider[T any] interface {
+        // AuthenticateUser authenticates a request and returns the user object if authentication is successful.
+        // It examines the request for authentication credentials (such as headers, cookies, or query parameters)
+        // and validates them according to the provider's implementation.
+        // Returns the user object if the request is authenticated, nil and an error otherwise.
+        AuthenticateUser(r *http.Request) (*T, error)
+}
+
+// BasicUserAuthProvider provides HTTP Basic Authentication with user object return.
+type BasicUserAuthProvider[T any] struct {
+        GetUserFunc func(username, password string) (*T, error)
+}
+
+// AuthenticateUser authenticates a request using HTTP Basic Authentication.
+// It extracts the username and password from the Authorization header
+// and validates them using the GetUserFunc.
+// Returns the user object if authentication is successful, nil and an error otherwise.
+func (p *BasicUserAuthProvider[T]) AuthenticateUser(r *http.Request) (*T, error) <span class="cov8" title="1">{
+        username, password, ok := r.BasicAuth()
+        if !ok </span><span class="cov8" title="1">{
+                return nil, errors.New("no basic auth credentials")
+        }</span>
+
+        <span class="cov8" title="1">return p.GetUserFunc(username, password)</span>
+}
+
+// BearerTokenUserAuthProvider provides Bearer Token Authentication with user object return.
+type BearerTokenUserAuthProvider[T any] struct {
+        GetUserFunc func(token string) (*T, error)
+}
+
+// AuthenticateUser authenticates a request using Bearer Token Authentication.
+// It extracts the token from the Authorization header and validates it
+// using the GetUserFunc.
+// Returns the user object if authentication is successful, nil and an error otherwise.
+func (p *BearerTokenUserAuthProvider[T]) AuthenticateUser(r *http.Request) (*T, error) <span class="cov8" title="1">{
+        authHeader := r.Header.Get("Authorization")
+        if authHeader == "" </span><span class="cov8" title="1">{
+                return nil, errors.New("no authorization header")
+        }</span>
+
+        // Check if the header starts with "Bearer "
+        <span class="cov8" title="1">if !strings.HasPrefix(authHeader, "Bearer ") </span><span class="cov8" title="1">{
+                return nil, errors.New("invalid authorization header format")
+        }</span>
+
+        // Extract the token
+        <span class="cov8" title="1">token := strings.TrimPrefix(authHeader, "Bearer ")
+
+        return p.GetUserFunc(token)</span>
+}
+
+// APIKeyUserAuthProvider provides API Key Authentication with user object return.
+type APIKeyUserAuthProvider[T any] struct {
+        GetUserFunc func(key string) (*T, error)
+        Header      string // header name (e.g., "X-API-Key")
+        Query       string // query parameter name (e.g., "api_key")
+}
+
+// AuthenticateUser authenticates a request using API Key Authentication.
+// It checks for the API key in either the specified header or query parameter
+// and validates it using the GetUserFunc.
+// Returns the user object if authentication is successful, nil and an error otherwise.
+func (p *APIKeyUserAuthProvider[T]) AuthenticateUser(r *http.Request) (*T, error) <span class="cov8" title="1">{
+        // Check header
+        if p.Header != "" </span><span class="cov8" title="1">{
+                key := r.Header.Get(p.Header)
+                if key != "" </span><span class="cov8" title="1">{
+                        return p.GetUserFunc(key)
+                }</span>
+        }
+
+        // Check query parameter
+        <span class="cov8" title="1">if p.Query != "" </span><span class="cov8" title="1">{
+                key := r.URL.Query().Get(p.Query)
+                if key != "" </span><span class="cov8" title="1">{
+                        return p.GetUserFunc(key)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil, errors.New("no API key found")</span>
+}
+
+// AuthenticationWithUserProvider is a middleware that uses an auth provider that returns a user object
+// and adds it to the request context if authentication is successful.
+func AuthenticationWithUserProvider[T any](provider UserAuthProvider[T], logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Authenticate the request
+                        user, err := provider.AuthenticateUser(r)
+                        if err != nil || user == nil </span><span class="cov8" title="1">{
+                                logger.Warn("Authentication failed",
+                                        zap.Error(err),
+                                        zap.String("method", r.Method),
+                                        zap.String("path", r.URL.Path),
+                                        zap.String("remote_addr", r.RemoteAddr),
+                                )
+                                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // If authentication is successful, add the user to the context
+                        <span class="cov8" title="1">ctx := context.WithValue(r.Context(), reflect.TypeOf(*new(T)), user)
+
+                        // Call the next handler with the updated context
+                        next.ServeHTTP(w, r.WithContext(ctx))</span>
+                })
+        }
+}
+
+// AuthenticationWithUser is a middleware that uses a custom auth function that returns a user object
+// and adds it to the request context if authentication is successful.
+func AuthenticationWithUser[T any](authFunc func(*http.Request) (*T, error)) common.Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Authenticate the request
+                        user, err := authFunc(r)
+                        if err != nil || user == nil </span><span class="cov8" title="1">{
+                                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                                return
+                        }</span>
+
+                        // If authentication is successful, add the user to the context
+                        <span class="cov8" title="1">ctx := context.WithValue(r.Context(), reflect.TypeOf(*new(T)), user)
+
+                        // Call the next handler with the updated context
+                        next.ServeHTTP(w, r.WithContext(ctx))</span>
+                })
+        }
+}
+
+// GetUser retrieves the user from the request context.
+// Returns nil if no user is found in the context.
+func GetUser[T any](r *http.Request) *T <span class="cov8" title="1">{
+        user, ok := r.Context().Value(reflect.TypeOf(*new(T))).(*T)
+        if !ok </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return user</span>
+}
+
+// NewBasicAuthWithUserMiddleware creates a middleware that uses HTTP Basic Authentication
+// and returns a user object.
+func NewBasicAuthWithUserMiddleware[T any](getUserFunc func(username, password string) (*T, error), logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        provider := &amp;BasicUserAuthProvider[T]{
+                GetUserFunc: getUserFunc,
+        }
+        return AuthenticationWithUserProvider(provider, logger)
+}</span>
+
+// NewBearerTokenWithUserMiddleware creates a middleware that uses Bearer Token Authentication
+// and returns a user object.
+func NewBearerTokenWithUserMiddleware[T any](getUserFunc func(token string) (*T, error), logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        provider := &amp;BearerTokenUserAuthProvider[T]{
+                GetUserFunc: getUserFunc,
+        }
+        return AuthenticationWithUserProvider(provider, logger)
+}</span>
+
+// NewAPIKeyWithUserMiddleware creates a middleware that uses API Key Authentication
+// and returns a user object.
+func NewAPIKeyWithUserMiddleware[T any](getUserFunc func(key string) (*T, error), header, query string, logger *zap.Logger) common.Middleware <span class="cov8" title="1">{
+        provider := &amp;APIKeyUserAuthProvider[T]{
+                GetUserFunc: getUserFunc,
+                Header:      header,
+                Query:       query,
+        }
+        return AuthenticationWithUserProvider(provider, logger)
+}</span>
+</pre>
+		
+		<pre class="file" id="file12" style="display: none">// Package middleware provides a collection of HTTP middleware components for the SRouter framework.
+// These middleware components can be used to add functionality such as logging, recovery from panics,
+// authentication, request timeouts, and more to your HTTP handlers.
+package middleware
+
+import (
+        "context"
+        "net/http"
+        "runtime/debug"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/Suhaibinator/SRouter/pkg/common"
+        "go.uber.org/zap"
+)
+
+// Middleware is an alias for the common.Middleware type.
+// It represents a function that wraps an http.Handler to provide additional functionality.
+type Middleware = common.Middleware
+
+// Chain chains multiple middlewares together into a single middleware.
+// The middlewares are applied in reverse order, so the first middleware in the list
+// will be the outermost wrapper (the first to process the request and the last to process the response).
+func Chain(middlewares ...Middleware) Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                for i := len(middlewares) - 1; i &gt;= 0; i-- </span><span class="cov8" title="1">{
+                        next = middlewares[i](next)
+                }</span>
+                <span class="cov8" title="1">return next</span>
+        }
+}
+
+// Recovery is a middleware that recovers from panics in HTTP handlers.
+// It logs the panic and stack trace using the provided logger and returns a 500 Internal Server Error response.
+// This prevents the server from crashing when a panic occurs in a handler.
+func Recovery(logger *zap.Logger) Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        defer func() </span><span class="cov8" title="1">{
+                                if rec := recover(); rec != nil </span><span class="cov8" title="1">{
+                                        // Log the panic
+                                        logger.Error("Panic recovered",
+                                                zap.Any("panic", rec),
+                                                zap.String("stack", string(debug.Stack())),
+                                                zap.String("method", r.Method),
+                                                zap.String("path", r.URL.Path),
+                                        )
+
+                                        // Return a 500 Internal Server Error
+                                        http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+                                }</span>
+                        }()
+
+                        <span class="cov8" title="1">next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+// Logging is a middleware that logs HTTP requests and responses.
+// It captures the request method, path, status code, and duration.
+// The log level is determined by the status code and duration:
+// - 500+ status codes are logged at Error level
+// - 400-499 status codes are logged at Warn level
+// - Requests taking longer than 1 second are logged at Warn level
+// - All other requests are logged at Debug level
+func Logging(logger *zap.Logger) Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        start := time.Now()
+
+                        // Create a response writer that captures the status code
+                        rw := &amp;responseWriter{
+                                ResponseWriter: w,
+                                statusCode:     http.StatusOK,
+                        }
+
+                        // Call the next handler
+                        next.ServeHTTP(rw, r)
+
+                        // Calculate duration
+                        duration := time.Since(start)
+
+                        // Use appropriate log level based on status code and duration
+                        if rw.statusCode &gt;= 500 </span><span class="cov0" title="0">{
+                                // Server errors at Error level
+                                logger.Error("Server error",
+                                        zap.String("method", r.Method),
+                                        zap.String("path", r.URL.Path),
+                                        zap.Int("status", rw.statusCode),
+                                        zap.Duration("duration", duration),
+                                        zap.String("remote_addr", r.RemoteAddr),
+                                )
+                        }</span> else<span class="cov8" title="1"> if rw.statusCode &gt;= 400 </span><span class="cov0" title="0">{
+                                // Client errors at Warn level
+                                logger.Warn("Client error",
+                                        zap.String("method", r.Method),
+                                        zap.String("path", r.URL.Path),
+                                        zap.Int("status", rw.statusCode),
+                                        zap.Duration("duration", duration),
+                                )
+                        }</span> else<span class="cov8" title="1"> if duration &gt; 1*time.Second </span><span class="cov0" title="0">{
+                                // Slow requests at Warn level
+                                logger.Warn("Slow request",
+                                        zap.String("method", r.Method),
+                                        zap.String("path", r.URL.Path),
+                                        zap.Int("status", rw.statusCode),
+                                        zap.Duration("duration", duration),
+                                )
+                        }</span> else<span class="cov8" title="1"> {
+                                // Normal requests at Debug level to avoid log spam
+                                logger.Debug("Request",
+                                        zap.String("method", r.Method),
+                                        zap.String("path", r.URL.Path),
+                                        zap.Int("status", rw.statusCode),
+                                        zap.Duration("duration", duration),
+                                )
+                        }</span>
+                })
+        }
+}
+
+// Authentication function has been moved to auth.go
+
+// MaxBodySize is a middleware that limits the size of the request body.
+// It prevents clients from sending excessively large requests that could
+// consume too much memory or cause denial of service.
+func MaxBodySize(maxSize int64) Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Limit the size of the request body
+                        r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+
+                        // Call the next handler
+                        next.ServeHTTP(w, r)
+                }</span>)
+        }
+}
+
+// Timeout is a middleware that sets a timeout for the request processing.
+// If the handler takes longer than the specified timeout to respond,
+// the middleware will cancel the request context and return a 408 Request Timeout response.
+// This prevents long-running requests from blocking server resources indefinitely.
+func Timeout(timeout time.Duration) Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Create a context with a timeout
+                        ctx, cancel := context.WithTimeout(r.Context(), timeout)
+                        defer cancel()
+
+                        // Create a new request with the timeout context
+                        r = r.WithContext(ctx)
+
+                        // Create a mutex to protect access to the response writer
+                        var wMutex sync.Mutex
+
+                        // Create a wrapped response writer that uses the mutex
+                        wrappedW := &amp;mutexResponseWriter{
+                                ResponseWriter: w,
+                                mu:             &amp;wMutex,
+                        }
+
+                        // Use a channel to signal when the handler is done
+                        done := make(chan struct{})
+                        go func() </span><span class="cov8" title="1">{
+                                next.ServeHTTP(wrappedW, r)
+                                close(done)
+                        }</span>()
+
+                        <span class="cov8" title="1">select </span>{
+                        case &lt;-done:<span class="cov8" title="1">
+                                // Handler finished normally
+                                return</span>
+                        case &lt;-ctx.Done():<span class="cov8" title="1">
+                                // Timeout occurred
+                                wMutex.Lock()
+                                http.Error(w, "Request Timeout", http.StatusRequestTimeout)
+                                wMutex.Unlock()
+                                return</span>
+                        }
+                })
+        }
+}
+
+// mutexResponseWriter is a wrapper around http.ResponseWriter that uses a mutex to protect access.
+// This ensures thread-safety when writing to the response from multiple goroutines.
+type mutexResponseWriter struct {
+        http.ResponseWriter
+        mu *sync.Mutex
+}
+
+// WriteHeader acquires the mutex and calls the underlying ResponseWriter.WriteHeader.
+// This ensures thread-safety when setting the status code from multiple goroutines.
+func (rw *mutexResponseWriter) WriteHeader(statusCode int) <span class="cov8" title="1">{
+        rw.mu.Lock()
+        defer rw.mu.Unlock()
+        rw.ResponseWriter.WriteHeader(statusCode)
+}</span>
+
+// Write acquires the mutex and calls the underlying ResponseWriter.Write.
+// This ensures thread-safety when writing the response body from multiple goroutines.
+func (rw *mutexResponseWriter) Write(b []byte) (int, error) <span class="cov0" title="0">{
+        rw.mu.Lock()
+        defer rw.mu.Unlock()
+        return rw.ResponseWriter.Write(b)
+}</span>
+
+// Flush acquires the mutex and calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This ensures thread-safety when flushing the response from multiple goroutines.
+func (rw *mutexResponseWriter) Flush() <span class="cov0" title="0">{
+        rw.mu.Lock()
+        defer rw.mu.Unlock()
+        if f, ok := rw.ResponseWriter.(http.Flusher); ok </span><span class="cov0" title="0">{
+                f.Flush()
+        }</span>
+}
+
+// CORS is a middleware that adds Cross-Origin Resource Sharing (CORS) headers to the response.
+// It allows you to specify which origins, methods, and headers are allowed for cross-origin requests.
+// This middleware also handles preflight OPTIONS requests automatically.
+func CORS(origins []string, methods []string, headers []string) Middleware <span class="cov8" title="1">{
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        // Set CORS headers
+                        if len(origins) &gt; 0 </span><span class="cov8" title="1">{
+                                w.Header().Set("Access-Control-Allow-Origin", strings.Join(origins, ", "))
+                        }</span>
+                        <span class="cov8" title="1">if len(methods) &gt; 0 </span><span class="cov8" title="1">{
+                                w.Header().Set("Access-Control-Allow-Methods", strings.Join(methods, ", "))
+                        }</span>
+                        <span class="cov8" title="1">if len(headers) &gt; 0 </span><span class="cov8" title="1">{
+                                w.Header().Set("Access-Control-Allow-Headers", strings.Join(headers, ", "))
+                        }</span>
+
+                        // Handle preflight requests
+                        <span class="cov8" title="1">if r.Method == http.MethodOptions </span><span class="cov8" title="1">{
+                                w.WriteHeader(http.StatusOK)
+                                return
+                        }</span>
+
+                        // Call the next handler
+                        <span class="cov8" title="1">next.ServeHTTP(w, r)</span>
+                })
+        }
+}
+
+// responseWriter is a wrapper around http.ResponseWriter that captures the status code.
+// This allows middleware to inspect the status code after the handler has completed.
+type responseWriter struct {
+        http.ResponseWriter
+        statusCode int
+}
+
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader.
+// This allows middleware to inspect the status code after the handler has completed.
+func (rw *responseWriter) WriteHeader(statusCode int) <span class="cov8" title="1">{
+        rw.statusCode = statusCode
+        rw.ResponseWriter.WriteHeader(statusCode)
+}</span>
+
+// Write calls the underlying ResponseWriter.Write.
+// It passes through the write operation to the wrapped ResponseWriter.
+func (rw *responseWriter) Write(b []byte) (int, error) <span class="cov8" title="1">{
+        return rw.ResponseWriter.Write(b)
+}</span>
+
+// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This allows streaming responses to be flushed to the client immediately.
+func (rw *responseWriter) Flush() <span class="cov8" title="1">{
+        if f, ok := rw.ResponseWriter.(http.Flusher); ok </span><span class="cov8" title="1">{
+                f.Flush()
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file13" style="display: none">// Package middleware provides a collection of HTTP middleware components for the SRouter framework.
+package middleware
+
+import (
+        "net/http"
+        "strconv"
+        "time"
+)
+
+// PrometheusMetrics is a middleware that collects Prometheus metrics for HTTP requests.
+// It can track request latency, throughput, queries per second, and error rates.
+// This is a placeholder implementation that demonstrates the structure but doesn't
+// actually record metrics to Prometheus. In a real implementation, you would use
+// the prometheus client library.
+func PrometheusMetrics(registry interface{}, namespace, subsystem string, enableLatency, enableThroughput, enableQPS, enableErrors bool) Middleware <span class="cov8" title="1">{
+        // In a real implementation, we would use the prometheus client library
+        // For now, we'll just create a middleware that logs metrics
+        return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
+                return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                        start := time.Now()
+
+                        // Create a response writer that captures metrics
+                        rw := &amp;prometheusResponseWriter{
+                                ResponseWriter: w,
+                                statusCode:     http.StatusOK,
+                        }
+
+                        // Call the next handler
+                        next.ServeHTTP(rw, r)
+
+                        // Record metrics
+                        duration := time.Since(start)
+                        statusCode := rw.statusCode
+                        method := r.Method
+                        path := r.URL.Path
+
+                        // In a real implementation, we would use the prometheus client library
+                        // to record metrics. For now, we'll just log them.
+                        if enableLatency </span><span class="cov8" title="1">{
+                                // Record request latency
+                                // e.g., requestLatency.WithLabelValues(method, path, strconv.Itoa(statusCode)).Observe(duration.Seconds())
+                                _ = duration
+                        }</span>
+
+                        <span class="cov8" title="1">if enableThroughput </span><span class="cov8" title="1">{
+                                // Record request throughput (bytes)
+                                // e.g., requestThroughput.WithLabelValues(method, path, strconv.Itoa(statusCode)).Add(float64(rw.bytesWritten))
+                                _ = rw.bytesWritten
+                        }</span>
+
+                        <span class="cov8" title="1">if enableQPS </span><span class="cov8" title="1">{
+                                // Record queries per second
+                                // e.g., requestsTotal.WithLabelValues(method, path, strconv.Itoa(statusCode)).Inc()
+                                _ = method
+                                _ = path
+                                _ = strconv.Itoa(statusCode)
+                        }</span>
+
+                        <span class="cov8" title="1">if enableErrors &amp;&amp; statusCode &gt;= 400 </span><span class="cov8" title="1">{
+                                // Record errors
+                                // e.g., requestErrors.WithLabelValues(method, path, strconv.Itoa(statusCode)).Inc()
+                                _ = statusCode // Use statusCode to avoid empty branch warning
+                        }</span>
+                })
+        }
+}
+
+// PrometheusHandler returns an HTTP handler for exposing Prometheus metrics.
+// This handler would typically be mounted at a path like "/metrics" to allow
+// Prometheus to scrape the metrics. This is a placeholder implementation that
+// doesn't actually expose real metrics.
+func PrometheusHandler(registry interface{}) http.Handler <span class="cov8" title="1">{
+        // In a real implementation, we would use the prometheus client library
+        // to create a handler that exposes metrics
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                w.Header().Set("Content-Type", "text/plain")
+                _, err := w.Write([]byte("# Prometheus metrics would be exposed here"))
+                if err != nil </span><span class="cov0" title="0">{
+                        // Log the error in a real implementation
+                        // For now, we'll just ignore it
+                        _ = err // Explicitly ignore the error to satisfy linter
+                }</span>
+        })
+}
+
+// prometheusResponseWriter is a wrapper around http.ResponseWriter that captures metrics.
+// It tracks the status code and number of bytes written to the response.
+type prometheusResponseWriter struct {
+        http.ResponseWriter
+        statusCode   int
+        bytesWritten int64
+}
+
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader.
+// This allows the middleware to track the HTTP status code for metrics.
+func (rw *prometheusResponseWriter) WriteHeader(statusCode int) <span class="cov8" title="1">{
+        rw.statusCode = statusCode
+        rw.ResponseWriter.WriteHeader(statusCode)
+}</span>
+
+// Write captures the number of bytes written and calls the underlying ResponseWriter.Write.
+// This allows the middleware to track the response size for throughput metrics.
+func (rw *prometheusResponseWriter) Write(b []byte) (int, error) <span class="cov8" title="1">{
+        n, err := rw.ResponseWriter.Write(b)
+        rw.bytesWritten += int64(n)
+        return n, err
+}</span>
+
+// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This allows streaming responses to be flushed to the client immediately.
+func (rw *prometheusResponseWriter) Flush() <span class="cov8" title="1">{
+        if f, ok := rw.ResponseWriter.(http.Flusher); ok </span><span class="cov8" title="1">{
+                f.Flush()
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file14" style="display: none">// Package router provides a flexible and feature-rich HTTP routing framework.
+// It supports middleware, sub-routers, generic handlers, and various configuration options.
+package router
 
 import (
         "context"
@@ -85,7 +2785,8 @@ import (
         "go.uber.org/zap"
 )
 
-// Router is the main router struct that implements http.Handler
+// Router is the main router struct that implements http.Handler.
+// It provides routing, middleware support, graceful shutdown, and other features.
 type Router struct {
         config      RouterConfig
         router      *httprouter.Router
@@ -96,15 +2797,18 @@ type Router struct {
         shutdownMu  sync.RWMutex
 }
 
-// contextKey is a type for context keys
+// contextKey is a type for context keys.
+// It's used to store and retrieve values from request contexts.
 type contextKey string
 
 const (
-        // ParamsKey is the key used to store httprouter.Params in the request context
+        // ParamsKey is the key used to store httprouter.Params in the request context.
+        // This allows route parameters to be accessed from handlers and middleware.
         ParamsKey contextKey = "params"
 )
 
-// NewRouter creates a new Router with the given configuration
+// NewRouter creates a new Router with the given configuration.
+// It initializes the underlying httprouter, sets up logging, and registers routes from sub-routers.
 func NewRouter(config RouterConfig) *Router <span class="cov8" title="1">{
         // Initialize the httprouter
         hr := httprouter.New()
@@ -151,7 +2855,8 @@ func NewRouter(config RouterConfig) *Router <span class="cov8" title="1">{
         <span class="cov8" title="1">return r</span>
 }
 
-// registerSubRouter registers all routes in a sub-router
+// registerSubRouter registers all routes in a sub-router.
+// It applies the sub-router's path prefix to all routes and registers them with the router.
 func (r *Router) registerSubRouter(sr SubRouterConfig) <span class="cov8" title="1">{
         for _, route := range sr.Routes </span><span class="cov8" title="1">{
                 // Create a full path by combining the sub-router prefix with the route path
@@ -162,7 +2867,7 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) <span class="cov8" title=
                 maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, sr.MaxBodySizeOverride)
 
                 // Create a handler with all middlewares applied
-                handler := r.wrapHandler(route.Handler, route.RequireAuth, timeout, maxBodySize, append(sr.Middlewares, route.Middlewares...))
+                handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, append(sr.Middlewares, route.Middlewares...))
 
                 // Register the route with httprouter
                 for _, method := range route.Methods </span><span class="cov8" title="1">{
@@ -171,15 +2876,16 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) <span class="cov8" title=
         }
 }
 
-// RegisterRoute registers a route with the router
-// For generic routes, use RegisterGenericRoute function
+// RegisterRoute registers a route with the router.
+// It creates a handler with all middlewares applied and registers it with the underlying httprouter.
+// For generic routes with type parameters, use RegisterGenericRoute function instead.
 func (r *Router) RegisterRoute(route RouteConfigBase) <span class="cov8" title="1">{
         // Get effective timeout and max body size for this route
         timeout := r.getEffectiveTimeout(route.Timeout, 0)
         maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, 0)
 
         // Create a handler with all middlewares applied
-        handler := r.wrapHandler(route.Handler, route.RequireAuth, timeout, maxBodySize, route.Middlewares)
+        handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
 
         // Register the route with httprouter
         for _, method := range route.Methods </span><span class="cov8" title="1">{
@@ -187,8 +2893,10 @@ func (r *Router) RegisterRoute(route RouteConfigBase) <span class="cov8" title="
         }</span>
 }
 
-// RegisterGenericRoute registers a route with generic request and response types
-// This is a standalone function rather than a method because Go methods cannot have type parameters
+// RegisterGenericRoute registers a route with generic request and response types.
+// This is a standalone function rather than a method because Go methods cannot have type parameters.
+// It creates a handler that uses the codec to decode the request and encode the response,
+// applies middleware, and registers the route with the router.
 func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) <span class="cov8" title="1">{
         // Get effective timeout and max body size for this route
         timeout := r.getEffectiveTimeout(route.Timeout, 0)
@@ -219,7 +2927,7 @@ func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) <spa
         })
 
         // Create a handler with all middlewares applied
-        <span class="cov8" title="1">wrappedHandler := r.wrapHandler(handler, route.RequireAuth, timeout, maxBodySize, route.Middlewares)
+        <span class="cov8" title="1">wrappedHandler := r.wrapHandler(handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
 
         // Register the route with httprouter
         for _, method := range route.Methods </span><span class="cov8" title="1">{
@@ -227,7 +2935,8 @@ func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) <spa
         }</span>
 }
 
-// convertToHTTPRouterHandle converts an http.Handler to an httprouter.Handle
+// convertToHTTPRouterHandle converts an http.Handler to an httprouter.Handle.
+// It stores the route parameters in the request context so they can be accessed by handlers.
 func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Handle <span class="cov8" title="1">{
         return func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) </span><span class="cov8" title="1">{
                 // Store the params in the request context
@@ -239,8 +2948,10 @@ func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Hand
         }</span>
 }
 
-// wrapHandler wraps a handler with all the necessary middleware
-func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler <span class="cov8" title="1">{
+// wrapHandler wraps a handler with all the necessary middleware.
+// It applies authentication, timeout, body size limits, and other middleware
+// to create a complete request processing pipeline.
+func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler <span class="cov8" title="1">{
         // Create a handler that applies all the router's functionality
         h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) </span><span class="cov8" title="1">{
                 // First add to the wait group before checking shutdown status
@@ -313,10 +3024,15 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout
                 }</span>
         }))
 
-        // Apply authentication middleware if required
-        <span class="cov8" title="1">if requireAuth </span><span class="cov8" title="1">{
-                h = r.authMiddleware(h)
-        }</span>
+        // Apply authentication middleware based on the auth level
+        <span class="cov8" title="1">switch authLevel </span>{
+        case AuthRequired:<span class="cov8" title="1">
+                h = r.authRequiredMiddleware(h)</span>
+        case AuthOptional:<span class="cov0" title="0">
+                h = r.authOptionalMiddleware(h)</span>
+        case NoAuth:<span class="cov8" title="1"></span>
+                // No authentication middleware needed
+        }
 
         // Apply route-specific middlewares
         <span class="cov8" title="1">for i := len(middlewares) - 1; i &gt;= 0; i-- </span><span class="cov8" title="1">{
@@ -334,7 +3050,9 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout
         return h</span>
 }
 
-// ServeHTTP implements the http.Handler interface
+// ServeHTTP implements the http.Handler interface.
+// It handles HTTP requests by applying metrics and tracing if enabled,
+// and then delegating to the underlying httprouter.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) <span class="cov8" title="1">{
         // Create a response writer that captures metrics
         var rw http.ResponseWriter
@@ -415,7 +3133,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) <span class
         <span class="cov8" title="1">r.router.ServeHTTP(rw, req)</span>
 }
 
-// metricsResponseWriter is a wrapper around http.ResponseWriter that captures metrics
+// metricsResponseWriter is a wrapper around http.ResponseWriter that captures metrics.
+// It tracks the status code, bytes written, and timing information for each response.
 type metricsResponseWriter struct {
         http.ResponseWriter
         statusCode   int
@@ -425,27 +3144,32 @@ type metricsResponseWriter struct {
         router       *Router
 }
 
-// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader.
+// This allows the router to track the HTTP status code for metrics and logging.
 func (rw *metricsResponseWriter) WriteHeader(statusCode int) <span class="cov8" title="1">{
         rw.statusCode = statusCode
         rw.ResponseWriter.WriteHeader(statusCode)
 }</span>
 
-// Write captures the number of bytes written and calls the underlying ResponseWriter.Write
+// Write captures the number of bytes written and calls the underlying ResponseWriter.Write.
+// This allows the router to track the response size for metrics and logging.
 func (rw *metricsResponseWriter) Write(b []byte) (int, error) <span class="cov8" title="1">{
         n, err := rw.ResponseWriter.Write(b)
         rw.bytesWritten += int64(n)
         return n, err
 }</span>
 
-// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher
+// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This allows streaming responses to be flushed to the client immediately.
 func (rw *metricsResponseWriter) Flush() <span class="cov8" title="1">{
         if f, ok := rw.ResponseWriter.(http.Flusher); ok </span><span class="cov8" title="1">{
                 f.Flush()
         }</span>
 }
 
-// Shutdown gracefully shuts down the router
+// Shutdown gracefully shuts down the router.
+// It stops accepting new requests and waits for existing requests to complete.
+// If the context is canceled before all requests complete, it returns the context's error.
 func (r *Router) Shutdown(ctx context.Context) error <span class="cov8" title="1">{
         // Mark the router as shutting down
         r.shutdownMu.Lock()
@@ -468,18 +3192,21 @@ func (r *Router) Shutdown(ctx context.Context) error <span class="cov8" title="1
         }
 }
 
-// GetParams retrieves the httprouter.Params from the request context
+// GetParams retrieves the httprouter.Params from the request context.
+// This allows handlers to access route parameters extracted from the URL.
 func GetParams(r *http.Request) httprouter.Params <span class="cov8" title="1">{
         params, _ := r.Context().Value(ParamsKey).(httprouter.Params)
         return params
 }</span>
 
-// GetParam retrieves a specific parameter from the request context
+// GetParam retrieves a specific parameter from the request context.
+// It's a convenience function that combines GetParams and ByName.
 func GetParam(r *http.Request, name string) string <span class="cov8" title="1">{
         return GetParams(r).ByName(name)
 }</span>
 
-// getEffectiveTimeout returns the effective timeout for a route
+// getEffectiveTimeout returns the effective timeout for a route.
+// It considers route-specific, sub-router, and global timeout settings in that order of precedence.
 func (r *Router) getEffectiveTimeout(routeTimeout, subRouterTimeout time.Duration) time.Duration <span class="cov8" title="1">{
         if routeTimeout &gt; 0 </span><span class="cov8" title="1">{
                 return routeTimeout
@@ -490,7 +3217,8 @@ func (r *Router) getEffectiveTimeout(routeTimeout, subRouterTimeout time.Duratio
         <span class="cov8" title="1">return r.config.GlobalTimeout</span>
 }
 
-// getEffectiveMaxBodySize returns the effective max body size for a route
+// getEffectiveMaxBodySize returns the effective max body size for a route.
+// It considers route-specific, sub-router, and global max body size settings in that order of precedence.
 func (r *Router) getEffectiveMaxBodySize(routeMaxBodySize, subRouterMaxBodySize int64) int64 <span class="cov8" title="1">{
         if routeMaxBodySize &gt; 0 </span><span class="cov8" title="1">{
                 return routeMaxBodySize
@@ -501,7 +3229,8 @@ func (r *Router) getEffectiveMaxBodySize(routeMaxBodySize, subRouterMaxBodySize 
         <span class="cov8" title="1">return r.config.GlobalMaxBodySize</span>
 }
 
-// handleError handles an error by logging it and returning an appropriate HTTP response
+// handleError handles an error by logging it and returning an appropriate HTTP response.
+// It checks if the error is a specific HTTPError and uses its status code and message if available.
 func (r *Router) handleError(w http.ResponseWriter, req *http.Request, err error, statusCode int, message string) <span class="cov8" title="1">{
         // Log the error
         r.logger.Error(message,
@@ -521,18 +3250,24 @@ func (r *Router) handleError(w http.ResponseWriter, req *http.Request, err error
         <span class="cov8" title="1">http.Error(w, message, statusCode)</span>
 }
 
-// HTTPError represents an HTTP error with a status code and message
+// HTTPError represents an HTTP error with a status code and message.
+// It can be used to return specific HTTP errors from handlers.
+// When returned from a handler, the router will use the status code and message
+// to generate an appropriate HTTP response. This allows handlers to control
+// the exact error response sent to clients.
 type HTTPError struct {
-        StatusCode int
-        Message    string
+        StatusCode int    // HTTP status code (e.g., 400, 404, 500)
+        Message    string // Error message to be sent in the response body
 }
 
-// Error implements the error interface
+// Error implements the error interface.
+// It returns a string representation of the HTTP error in the format "status: message".
 func (e *HTTPError) Error() string <span class="cov8" title="1">{
         return fmt.Sprintf("%d: %s", e.StatusCode, e.Message)
 }</span>
 
-// NewHTTPError creates a new HTTPError
+// NewHTTPError creates a new HTTPError with the specified status code and message.
+// It's a convenience function for creating HTTP errors in handlers.
 func NewHTTPError(statusCode int, message string) *HTTPError <span class="cov8" title="1">{
         return &amp;HTTPError{
                 StatusCode: statusCode,
@@ -540,7 +3275,9 @@ func NewHTTPError(statusCode int, message string) *HTTPError <span class="cov8" 
         }
 }</span>
 
-// recoveryMiddleware is a middleware that recovers from panics
+// recoveryMiddleware is a middleware that recovers from panics in handlers.
+// It logs the panic and returns a 500 Internal Server Error response.
+// This prevents the server from crashing when a handler panics.
 func (r *Router) recoveryMiddleware(next http.Handler) http.Handler <span class="cov8" title="1">{
         return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) </span><span class="cov8" title="1">{
                 defer func() </span><span class="cov8" title="1">{
@@ -561,8 +3298,11 @@ func (r *Router) recoveryMiddleware(next http.Handler) http.Handler <span class=
         })
 }
 
-// authMiddleware is a middleware that checks if a request is authenticated
-func (r *Router) authMiddleware(next http.Handler) http.Handler <span class="cov8" title="1">{
+// authRequiredMiddleware is a middleware that requires authentication for a request.
+// If authentication fails, it returns a 401 Unauthorized response.
+// This is a placeholder implementation that just checks for the presence of an Authorization header.
+// In a real application, you would implement proper authentication logic here.
+func (r *Router) authRequiredMiddleware(next http.Handler) http.Handler <span class="cov8" title="1">{
         return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) </span><span class="cov8" title="1">{
                 // This is a placeholder for actual authentication logic
                 // In a real application, you would check for a valid token, session, etc.
@@ -578,7 +3318,33 @@ func (r *Router) authMiddleware(next http.Handler) http.Handler <span class="cov
         })
 }
 
-// loggingMiddleware is a middleware that logs requests
+// authOptionalMiddleware is a middleware that attempts authentication for a request,
+// but allows the request to proceed even if authentication fails.
+// This is a placeholder implementation that just checks for the presence of an Authorization header.
+// In a real application, you would implement proper authentication logic here.
+func (r *Router) authOptionalMiddleware(next http.Handler) http.Handler <span class="cov8" title="1">{
+        return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) </span><span class="cov8" title="1">{
+                // This is a placeholder for actual authentication logic
+                // In a real application, you would check for a valid token, session, etc.
+                // For now, we'll just check for the presence of an Authorization header
+                authHeader := req.Header.Get("Authorization")
+                if authHeader != "" </span><span class="cov8" title="1">{
+                        // If authentication is successful, you would add the user to the context
+                        // For now, we'll just log that authentication was successful
+                        r.logger.Debug("Authentication successful",
+                                zap.String("method", req.Method),
+                                zap.String("path", req.URL.Path),
+                                zap.String("remote_addr", req.RemoteAddr),
+                        )
+                }</span>
+
+                // Call the next handler regardless of authentication result
+                <span class="cov8" title="1">next.ServeHTTP(w, req)</span>
+        })
+}
+
+// LoggingMiddleware is a middleware that logs HTTP requests and responses.
+// It captures the request method, path, status code, and duration.
 func LoggingMiddleware(logger *zap.Logger) Middleware <span class="cov8" title="1">{
         return func(next http.Handler) http.Handler </span><span class="cov8" title="1">{
                 return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) </span><span class="cov8" title="1">{
@@ -604,55 +3370,63 @@ func LoggingMiddleware(logger *zap.Logger) Middleware <span class="cov8" title="
         }
 }
 
-// responseWriter is a wrapper around http.ResponseWriter that captures the status code
+// responseWriter is a wrapper around http.ResponseWriter that captures the status code.
+// This allows middleware to inspect the status code after the handler has completed.
 type responseWriter struct {
         http.ResponseWriter
         statusCode int
 }
 
-// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader
+// WriteHeader captures the status code and calls the underlying ResponseWriter.WriteHeader.
+// This allows middleware to inspect the status code after the handler has completed.
 func (rw *responseWriter) WriteHeader(statusCode int) <span class="cov8" title="1">{
         rw.statusCode = statusCode
         rw.ResponseWriter.WriteHeader(statusCode)
 }</span>
 
-// Write calls the underlying ResponseWriter.Write
+// Write calls the underlying ResponseWriter.Write.
+// It passes through the write operation to the wrapped ResponseWriter.
 func (rw *responseWriter) Write(b []byte) (int, error) <span class="cov8" title="1">{
         return rw.ResponseWriter.Write(b)
 }</span>
 
-// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher
+// Flush calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This allows streaming responses to be flushed to the client immediately.
 func (rw *responseWriter) Flush() <span class="cov8" title="1">{
         if f, ok := rw.ResponseWriter.(http.Flusher); ok </span><span class="cov8" title="1">{
                 f.Flush()
         }</span>
 }
 
-// mutexResponseWriter is a wrapper around http.ResponseWriter that uses a mutex to protect access
+// mutexResponseWriter is a wrapper around http.ResponseWriter that uses a mutex to protect access.
+// This ensures thread-safety when writing to the response from multiple goroutines.
 type mutexResponseWriter struct {
         http.ResponseWriter
         mu *sync.Mutex
 }
 
-// WriteHeader acquires the mutex and calls the underlying ResponseWriter.WriteHeader
+// WriteHeader acquires the mutex and calls the underlying ResponseWriter.WriteHeader.
+// This ensures thread-safety when setting the status code from multiple goroutines.
 func (rw *mutexResponseWriter) WriteHeader(statusCode int) <span class="cov8" title="1">{
         rw.mu.Lock()
         defer rw.mu.Unlock()
         rw.ResponseWriter.WriteHeader(statusCode)
 }</span>
 
-// Write acquires the mutex and calls the underlying ResponseWriter.Write
+// Write acquires the mutex and calls the underlying ResponseWriter.Write.
+// This ensures thread-safety when writing the response body from multiple goroutines.
 func (rw *mutexResponseWriter) Write(b []byte) (int, error) <span class="cov8" title="1">{
         rw.mu.Lock()
         defer rw.mu.Unlock()
         return rw.ResponseWriter.Write(b)
 }</span>
 
-// Flush acquires the mutex and calls the underlying ResponseWriter.Flush if it implements http.Flusher
-func (rw *mutexResponseWriter) Flush() <span class="cov0" title="0">{
+// Flush acquires the mutex and calls the underlying ResponseWriter.Flush if it implements http.Flusher.
+// This ensures thread-safety when flushing the response from multiple goroutines.
+func (rw *mutexResponseWriter) Flush() <span class="cov8" title="1">{
         rw.mu.Lock()
         defer rw.mu.Unlock()
-        if f, ok := rw.ResponseWriter.(http.Flusher); ok </span><span class="cov0" title="0">{
+        if f, ok := rw.ResponseWriter.(http.Flusher); ok </span><span class="cov8" title="1">{
                 f.Flush()
         }</span>
 }
