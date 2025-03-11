@@ -10,6 +10,27 @@ import (
 	"go.uber.org/zap"
 )
 
+// AuthLevel defines the authentication level for a route.
+// It determines how authentication is handled for the route.
+type AuthLevel int
+
+const (
+	// NoAuth indicates that no authentication is required for the route.
+	// The route will be accessible without any authentication.
+	NoAuth AuthLevel = iota
+
+	// AuthOptional indicates that authentication is optional for the route.
+	// If authentication credentials are provided, they will be validated and the user
+	// will be added to the request context if valid. If no credentials are provided
+	// or they are invalid, the request will still proceed without a user in the context.
+	AuthOptional
+
+	// AuthRequired indicates that authentication is required for the route.
+	// If authentication fails, the request will be rejected with a 401 Unauthorized response.
+	// If authentication succeeds, the user will be added to the request context.
+	AuthRequired
+)
+
 // PrometheusConfig defines the configuration for Prometheus metrics.
 // It allows customization of how metrics are collected and labeled.
 type PrometheusConfig struct {
@@ -50,7 +71,7 @@ type SubRouterConfig struct {
 type RouteConfigBase struct {
 	Path        string              // Route path (will be prefixed with sub-router path prefix if applicable)
 	Methods     []string            // HTTP methods this route handles
-	RequireAuth bool                // Whether this route requires authentication
+	AuthLevel   AuthLevel           // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
 	Timeout     time.Duration       // Override timeout for this specific route
 	MaxBodySize int64               // Override max body size for this specific route
 	Handler     http.HandlerFunc    // Standard HTTP handler function
@@ -63,7 +84,7 @@ type RouteConfigBase struct {
 type RouteConfig[T any, U any] struct {
 	Path        string               // Route path (will be prefixed with sub-router path prefix if applicable)
 	Methods     []string             // HTTP methods this route handles
-	RequireAuth bool                 // Whether this route requires authentication
+	AuthLevel   AuthLevel            // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
 	Timeout     time.Duration        // Override timeout for this specific route
 	MaxBodySize int64                // Override max body size for this specific route
 	Codec       Codec[T, U]          // Codec for marshaling/unmarshaling request and response

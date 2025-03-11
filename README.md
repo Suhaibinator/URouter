@@ -158,7 +158,7 @@ func CreateUserHandler(r *http.Request, req CreateUserReq) (CreateUserResp, erro
 router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
 	Path:        "/api/users",
 	Methods:     []string{"POST"},
-	RequireAuth: true,
+	AuthLevel:   router.AuthRequired,
 	Codec:       codec.NewJSONCodec[CreateUserReq, CreateUserResp](),
 	Handler:     CreateUserHandler,
 })
@@ -222,11 +222,57 @@ if err := srv.Shutdown(ctx); err != nil {
 
 ## Advanced Usage
 
-### Custom Authentication
+### Authentication
+
+SRouter provides a flexible authentication system with three authentication levels and two authentication approaches.
+
+#### Authentication Levels
+
+SRouter supports three authentication levels:
+
+1. **NoAuth**: No authentication is required. The route is accessible without any authentication.
+2. **AuthOptional**: Authentication is optional. If authentication credentials are provided, they will be validated and the user will be added to the request context if valid. If no credentials are provided or they are invalid, the request will still proceed without a user in the context.
+3. **AuthRequired**: Authentication is required. If authentication fails, the request will be rejected with a 401 Unauthorized response. If authentication succeeds, the user will be added to the request context.
+
+You can specify the authentication level for a route using the `AuthLevel` field in the route configuration:
+
+```go
+// Create a router configuration with different authentication levels
+routerConfig := router.RouterConfig{
+    // ...
+    SubRouters: []router.SubRouterConfig{
+        {
+            PathPrefix: "/api",
+            Routes: []router.RouteConfigBase{
+                {
+                    Path:      "/public",
+                    Methods:   []string{"GET"},
+                    AuthLevel: router.NoAuth,
+                    Handler:   PublicHandler,
+                },
+                {
+                    Path:      "/optional",
+                    Methods:   []string{"GET"},
+                    AuthLevel: router.AuthOptional,
+                    Handler:   OptionalAuthHandler,
+                },
+                {
+                    Path:      "/protected",
+                    Methods:   []string{"GET"},
+                    AuthLevel: router.AuthRequired,
+                    Handler:   ProtectedHandler,
+                },
+            },
+        },
+    },
+}
+```
+
+#### Authentication Approaches
 
 SRouter provides two approaches to authentication:
 
-#### Boolean Authentication
+##### Boolean Authentication
 
 The simplest approach is to use a function that returns a boolean indicating whether authentication was successful:
 
@@ -253,15 +299,15 @@ authMiddleware := middleware.Authentication(customAuth)
 r.RegisterRoute(router.RouteConfigBase{
 	Path:        "/protected",
 	Methods:     []string{"GET"},
-	RequireAuth: true, // This will use the default auth middleware
+	AuthLevel:   router.AuthRequired,
 	Handler:     ProtectedHandler,
 	Middlewares: []common.Middleware{
-		authMiddleware, // This will use the custom auth middleware
+		authMiddleware,
 	},
 })
 ```
 
-#### User-Returning Authentication
+##### User-Returning Authentication
 
 For more advanced use cases, you can use a function that returns a user object and an error. This allows you to:
 
@@ -305,6 +351,7 @@ authMiddleware := middleware.AuthenticationWithUser[User](customUserAuth)
 r.RegisterRoute(router.RouteConfigBase{
 	Path:        "/protected",
 	Methods:     []string{"GET"},
+	AuthLevel:   router.AuthRequired,
 	Middlewares: []common.Middleware{
 		authMiddleware,
 	},
@@ -379,7 +426,7 @@ middleware.NewAPIKeyWithUserMiddleware[User](
 )
 ```
 
-See the `examples/user-auth` directory for a complete example.
+See the `examples/user-auth` directory for a complete example of user-returning authentication and the `examples/auth-levels` directory for a complete example of authentication levels.
 
 ### Custom Error Handling
 
@@ -501,6 +548,7 @@ func NewXMLCodec[T any, U any]() *XMLCodec[T, U] {
 router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
 	Path:        "/api/users",
 	Methods:     []string{"POST"},
+	AuthLevel:   router.NoAuth, // No authentication required
 	Codec:       NewXMLCodec[CreateUserReq, CreateUserResp](),
 	Handler:     CreateUserHandler,
 })
@@ -593,7 +641,7 @@ type SubRouterConfig struct {
 type RouteConfigBase struct {
 	Path        string              // Route path (will be prefixed with sub-router path prefix if applicable)
 	Methods     []string            // HTTP methods this route handles
-	RequireAuth bool                // Whether this route requires authentication
+	AuthLevel   AuthLevel           // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
 	Timeout     time.Duration       // Override timeout for this specific route
 	MaxBodySize int64               // Override max body size for this specific route
 	Handler     http.HandlerFunc    // Standard HTTP handler function
@@ -607,13 +655,30 @@ type RouteConfigBase struct {
 type RouteConfig[T any, U any] struct {
 	Path        string               // Route path (will be prefixed with sub-router path prefix if applicable)
 	Methods     []string             // HTTP methods this route handles
-	RequireAuth bool                 // Whether this route requires authentication
+	AuthLevel   AuthLevel            // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
 	Timeout     time.Duration        // Override timeout for this specific route
 	MaxBodySize int64                // Override max body size for this specific route
 	Codec       Codec[T, U]          // Codec for marshaling/unmarshaling request and response
 	Handler     GenericHandler[T, U] // Generic handler function
 	Middlewares []common.Middleware  // Middlewares applied to this specific route
 }
+```
+
+### AuthLevel
+
+```go
+type AuthLevel int
+
+const (
+	// NoAuth indicates that no authentication is required for the route.
+	NoAuth AuthLevel = iota
+
+	// AuthOptional indicates that authentication is optional for the route.
+	AuthOptional
+
+	// AuthRequired indicates that authentication is required for the route.
+	AuthRequired
+)
 ```
 
 ## Middleware Reference

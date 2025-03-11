@@ -98,7 +98,7 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) {
 		maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, sr.MaxBodySizeOverride)
 
 		// Create a handler with all middlewares applied
-		handler := r.wrapHandler(route.Handler, route.RequireAuth, timeout, maxBodySize, append(sr.Middlewares, route.Middlewares...))
+		handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, append(sr.Middlewares, route.Middlewares...))
 
 		// Register the route with httprouter
 		for _, method := range route.Methods {
@@ -116,7 +116,7 @@ func (r *Router) RegisterRoute(route RouteConfigBase) {
 	maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, 0)
 
 	// Create a handler with all middlewares applied
-	handler := r.wrapHandler(route.Handler, route.RequireAuth, timeout, maxBodySize, route.Middlewares)
+	handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
 
 	// Register the route with httprouter
 	for _, method := range route.Methods {
@@ -158,7 +158,7 @@ func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) {
 	})
 
 	// Create a handler with all middlewares applied
-	wrappedHandler := r.wrapHandler(handler, route.RequireAuth, timeout, maxBodySize, route.Middlewares)
+	wrappedHandler := r.wrapHandler(handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
 
 	// Register the route with httprouter
 	for _, method := range route.Methods {
@@ -182,7 +182,7 @@ func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Hand
 // wrapHandler wraps a handler with all the necessary middleware.
 // It applies authentication, timeout, body size limits, and other middleware
 // to create a complete request processing pipeline.
-func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler {
+func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler {
 	// Create a handler that applies all the router's functionality
 	h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// First add to the wait group before checking shutdown status
@@ -255,9 +255,14 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, requireAuth bool, timeout
 		}
 	}))
 
-	// Apply authentication middleware if required
-	if requireAuth {
-		h = r.authMiddleware(h)
+	// Apply authentication middleware based on the auth level
+	switch authLevel {
+	case AuthRequired:
+		h = r.authRequiredMiddleware(h)
+	case AuthOptional:
+		h = r.authOptionalMiddleware(h)
+	case NoAuth:
+		// No authentication middleware needed
 	}
 
 	// Apply route-specific middlewares
@@ -524,10 +529,11 @@ func (r *Router) recoveryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// authMiddleware is a middleware that checks if a request is authenticated.
+// authRequiredMiddleware is a middleware that requires authentication for a request.
+// If authentication fails, it returns a 401 Unauthorized response.
 // This is a placeholder implementation that just checks for the presence of an Authorization header.
 // In a real application, you would implement proper authentication logic here.
-func (r *Router) authMiddleware(next http.Handler) http.Handler {
+func (r *Router) authRequiredMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// This is a placeholder for actual authentication logic
 		// In a real application, you would check for a valid token, session, etc.
@@ -539,6 +545,31 @@ func (r *Router) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// If authentication is successful, call the next handler
+		next.ServeHTTP(w, req)
+	})
+}
+
+// authOptionalMiddleware is a middleware that attempts authentication for a request,
+// but allows the request to proceed even if authentication fails.
+// This is a placeholder implementation that just checks for the presence of an Authorization header.
+// In a real application, you would implement proper authentication logic here.
+func (r *Router) authOptionalMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// This is a placeholder for actual authentication logic
+		// In a real application, you would check for a valid token, session, etc.
+		// For now, we'll just check for the presence of an Authorization header
+		authHeader := req.Header.Get("Authorization")
+		if authHeader != "" {
+			// If authentication is successful, you would add the user to the context
+			// For now, we'll just log that authentication was successful
+			r.logger.Debug("Authentication successful",
+				zap.String("method", req.Method),
+				zap.String("path", req.URL.Path),
+				zap.String("remote_addr", req.RemoteAddr),
+			)
+		}
+
+		// Call the next handler regardless of authentication result
 		next.ServeHTTP(w, req)
 	})
 }
