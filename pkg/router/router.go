@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,9 @@ const (
 	// This allows route parameters to be accessed from handlers and middleware.
 	ParamsKey contextKey = "params"
 )
+
+// userIDContextKey is a custom type for the user ID context key to avoid collisions
+type userIDContextKey struct{}
 
 // NewRouter creates a new Router with the given configuration.
 // It initializes the underlying httprouter, sets up logging, and registers routes from sub-routers.
@@ -457,6 +461,16 @@ func GetParam(r *http.Request, name string) string {
 	return GetParams(r).ByName(name)
 }
 
+// GetUserID retrieves the user ID from the request context.
+// Returns the user ID if it exists in the context, an empty string otherwise.
+func GetUserID(r *http.Request) string {
+	userID, ok := r.Context().Value(userIDContextKey{}).(string)
+	if !ok {
+		return ""
+	}
+	return userID
+}
+
 // getEffectiveTimeout returns the effective timeout for a route.
 // It considers route-specific, sub-router, and global timeout settings in that order of precedence.
 func (r *Router) getEffectiveTimeout(routeTimeout, subRouterTimeout time.Duration) time.Duration {
@@ -564,37 +578,45 @@ func (r *Router) recoveryMiddleware(next http.Handler) http.Handler {
 
 // authRequiredMiddleware is a middleware that requires authentication for a request.
 // If authentication fails, it returns a 401 Unauthorized response.
-// This is a placeholder implementation that just checks for the presence of an Authorization header.
-// In a real application, you would implement proper authentication logic here.
+// It uses the middleware.Authentication function with a configurable authentication function.
 func (r *Router) authRequiredMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// This is a placeholder for actual authentication logic
-		// In a real application, you would check for a valid token, session, etc.
-		// For now, we'll just check for the presence of an Authorization header
+	// Use the middleware.Authentication function with a default authentication function
+	// that checks for the presence of an Authorization header and returns a string user ID
+	// This can be replaced with a more sophisticated authentication function
+	// that uses JWT, OAuth, or other authentication mechanisms
+	return middleware.Authentication(func(req *http.Request) (string, bool) {
+		// Default authentication function that checks for the presence of an Authorization header
+		// This should be replaced with a proper authentication function in a real application
 		authHeader := req.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
+			return "", false
 		}
 
-		// If authentication is successful, call the next handler
-		next.ServeHTTP(w, req)
-	})
+		// Extract the token from the Authorization header
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+
+		// Return the token as the user ID
+		return token, true
+	})(next)
 }
 
 // authOptionalMiddleware is a middleware that attempts authentication for a request,
 // but allows the request to proceed even if authentication fails.
-// This is a placeholder implementation that just checks for the presence of an Authorization header.
-// In a real application, you would implement proper authentication logic here.
+// It tries to authenticate the request and adds the user ID to the context if successful,
+// but allows the request to proceed even if authentication fails.
 func (r *Router) authOptionalMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// This is a placeholder for actual authentication logic
-		// In a real application, you would check for a valid token, session, etc.
-		// For now, we'll just check for the presence of an Authorization header
+		// Try to authenticate the request
 		authHeader := req.Header.Get("Authorization")
 		if authHeader != "" {
-			// If authentication is successful, you would add the user to the context
-			// For now, we'll just log that authentication was successful
+			// Extract the token from the Authorization header
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+
+			// Add the token as the user ID to the context
+			ctx := context.WithValue(req.Context(), userIDContextKey{}, token)
+			req = req.WithContext(ctx)
+
+			// Log that authentication was successful
 			r.logger.Debug("Authentication successful",
 				zap.String("method", req.Method),
 				zap.String("path", req.URL.Path),

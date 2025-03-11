@@ -118,19 +118,6 @@ func main() {
 		return &user, nil
 	}
 
-	// Create a basic auth function that returns a user
-	basicAuthUserFunc := func(username, password string) (*User, error) {
-		// In a real application, you would validate the password
-		// For this example, we'll just check if the user exists and the password is "password"
-		user, exists := users[username]
-		if !exists || password != "password" {
-			return nil, errors.New("invalid credentials")
-		}
-
-		// Return a pointer to the user
-		return &user, nil
-	}
-
 	// Create a router configuration
 	routerConfig := router.RouterConfig{
 		Logger:            logger,
@@ -156,7 +143,7 @@ func main() {
 						Methods:   []string{"GET"},
 						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
-							middleware.Authentication(func(r *http.Request) bool {
+							middleware.AuthenticationBool(func(r *http.Request) bool {
 								// Simple boolean authentication
 								authHeader := r.Header.Get("Authorization")
 								if authHeader == "" {
@@ -179,7 +166,7 @@ func main() {
 						Methods:   []string{"GET"},
 						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
-							middleware.AuthenticationWithUser[User](customUserAuth),
+							middleware.AuthenticationWithUser(customUserAuth),
 						},
 						Handler: protectedUserHandler,
 					},
@@ -188,16 +175,7 @@ func main() {
 						Methods:   []string{"GET"},
 						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
-							middleware.NewBearerTokenWithUserMiddleware[User](bearerTokenUserAuth, logger),
-						},
-						Handler: protectedUserHandler,
-					},
-					{
-						Path:      "/basic",
-						Methods:   []string{"GET"},
-						AuthLevel: router.AuthRequired,
-						Middlewares: []router.Middleware{
-							middleware.NewBasicAuthWithUserMiddleware[User](basicAuthUserFunc, logger),
+							middleware.NewBearerTokenWithUserMiddleware(bearerTokenUserAuth, logger),
 						},
 						Handler: protectedUserHandler,
 					},

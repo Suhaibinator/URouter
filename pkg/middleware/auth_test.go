@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,105 +9,77 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestBasicAuthProvider(t *testing.T) {
-	// Create a basic auth provider
-	provider := &BasicAuthProvider{
-		Credentials: map[string]string{
-			"user1": "pass1",
-			"user2": "pass2",
-		},
-	}
-
-	// Test valid credentials
-	req, _ := http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("user1", "pass1")
-	if !provider.Authenticate(req) {
-		t.Error("Expected authentication to succeed with valid credentials")
-	}
-
-	// Test invalid password
-	req, _ = http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("user1", "wrongpass")
-	if provider.Authenticate(req) {
-		t.Error("Expected authentication to fail with invalid password")
-	}
-
-	// Test invalid username
-	req, _ = http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("wronguser", "pass1")
-	if provider.Authenticate(req) {
-		t.Error("Expected authentication to fail with invalid username")
-	}
-
-	// Test missing auth header
-	req, _ = http.NewRequest("GET", "/", nil)
-	if provider.Authenticate(req) {
-		t.Error("Expected authentication to fail with missing auth header")
-	}
-}
-
 func TestBearerTokenProvider(t *testing.T) {
 	// Create a bearer token provider
-	provider := &BearerTokenProvider{
-		ValidTokens: map[string]bool{
-			"token1": true,
-			"token2": true,
+	provider := &BearerTokenProvider[int64]{
+		ValidTokens: map[string]int64{
+			"token1": 34,
+			"token2": 35,
 		},
 	}
 
 	// Test valid token
 	req, _ := http.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer token1")
-	if !provider.Authenticate(req) {
+	userID, ok := provider.Authenticate(req)
+	if !ok || userID != 34 {
 		t.Error("Expected authentication to succeed with valid token")
 	}
 
 	// Test invalid token
 	req, _ = http.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer wrongtoken")
-	if provider.Authenticate(req) {
+	_, ok = provider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with invalid token")
 	}
 
 	// Test missing auth header
 	req, _ = http.NewRequest("GET", "/", nil)
-	if provider.Authenticate(req) {
+	_, ok = provider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with missing auth header")
 	}
 
 	// Test wrong auth header format
 	req, _ = http.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "NotBearer token1")
-	if provider.Authenticate(req) {
+	_, ok = provider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with wrong auth header format")
 	}
 
 	// Test with validator function
-	provider = &BearerTokenProvider{
-		Validator: func(token string) bool {
-			return token == "validtoken"
+	provider = &BearerTokenProvider[int64]{
+		Validator: func(token string) (int64, bool) {
+			if token == "validtoken" {
+				return 1, true
+			}
+			return 0, false
 		},
 	}
 
 	req, _ = http.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer validtoken")
-	if !provider.Authenticate(req) {
+	userID, ok = provider.Authenticate(req)
+	if !ok || userID != 1 {
 		t.Error("Expected authentication to succeed with valid token using validator")
 	}
 
 	req, _ = http.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer invalidtoken")
-	if provider.Authenticate(req) {
+	_, ok = provider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with invalid token using validator")
 	}
 }
 
 func TestAPIKeyProvider(t *testing.T) {
 	// Create an API key provider
-	provider := &APIKeyProvider{
-		ValidKeys: map[string]bool{
-			"key1": true,
-			"key2": true,
+	provider := &APIKeyProvider[int64]{
+		ValidKeys: map[string]int64{
+			"key1": 35,
+			"key2": 34,
 		},
 		Header: "X-API-Key",
 		Query:  "api_key",
@@ -115,37 +88,42 @@ func TestAPIKeyProvider(t *testing.T) {
 	// Test valid header
 	req, _ := http.NewRequest("GET", "/", nil)
 	req.Header.Set("X-API-Key", "key1")
-	if !provider.Authenticate(req) {
+	userID, ok := provider.Authenticate(req)
+	if !ok || userID != 35 {
 		t.Error("Expected authentication to succeed with valid header")
 	}
 
 	// Test valid query parameter
 	req, _ = http.NewRequest("GET", "/?api_key=key2", nil)
-	if !provider.Authenticate(req) {
+	userID, ok = provider.Authenticate(req)
+	if !ok || userID != 34 {
 		t.Error("Expected authentication to succeed with valid query parameter")
 	}
 
 	// Test invalid header
 	req, _ = http.NewRequest("GET", "/", nil)
 	req.Header.Set("X-API-Key", "wrongkey")
-	if provider.Authenticate(req) {
+	_, ok = provider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with invalid header")
 	}
 
 	// Test invalid query parameter
 	req, _ = http.NewRequest("GET", "/?api_key=wrongkey", nil)
-	if provider.Authenticate(req) {
+	_, ok = provider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with invalid query parameter")
 	}
 
 	// Test missing auth
 	req, _ = http.NewRequest("GET", "/", nil)
-	if provider.Authenticate(req) {
+	_, ok = provider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with missing auth")
 	}
 
-	// Test header only
-	provider = &APIKeyProvider{
+	// Create a new provider for header only test
+	headerProvider := &APIKeyProvider[bool]{
 		ValidKeys: map[string]bool{
 			"key1": true,
 		},
@@ -154,17 +132,19 @@ func TestAPIKeyProvider(t *testing.T) {
 
 	req, _ = http.NewRequest("GET", "/", nil)
 	req.Header.Set("X-API-Key", "key1")
-	if !provider.Authenticate(req) {
+	boolValue, ok := headerProvider.Authenticate(req)
+	if !ok || !boolValue {
 		t.Error("Expected authentication to succeed with valid header (header only)")
 	}
 
 	req, _ = http.NewRequest("GET", "/?api_key=key1", nil)
-	if provider.Authenticate(req) {
+	_, ok = headerProvider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with query parameter (header only)")
 	}
 
-	// Test query only
-	provider = &APIKeyProvider{
+	// Create a new provider for query only test
+	queryProvider := &APIKeyProvider[bool]{
 		ValidKeys: map[string]bool{
 			"key1": true,
 		},
@@ -172,13 +152,15 @@ func TestAPIKeyProvider(t *testing.T) {
 	}
 
 	req, _ = http.NewRequest("GET", "/?api_key=key1", nil)
-	if !provider.Authenticate(req) {
+	boolValue, ok = queryProvider.Authenticate(req)
+	if !ok || !boolValue {
 		t.Error("Expected authentication to succeed with valid query parameter (query only)")
 	}
 
 	req, _ = http.NewRequest("GET", "/", nil)
 	req.Header.Set("X-API-Key", "key1")
-	if provider.Authenticate(req) {
+	_, ok = queryProvider.Authenticate(req)
+	if ok {
 		t.Error("Expected authentication to fail with header (query only)")
 	}
 }
@@ -187,15 +169,22 @@ func TestAuthenticationWithProvider(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a provider
-	provider := &BasicAuthProvider{
-		Credentials: map[string]string{
-			"user1": "pass1",
+	// Create a bearer token provider
+	provider := &BearerTokenProvider[bool]{
+		ValidTokens: map[string]bool{
+			"token1": true,
+			"token2": true,
 		},
 	}
 
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get the user ID from the context
+		userID, ok := GetUserID[bool](r)
+		if !ok || !userID {
+			t.Error("Expected user ID to be in context")
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
@@ -209,9 +198,9 @@ func TestAuthenticationWithProvider(t *testing.T) {
 	// Wrap the handler
 	wrappedHandler := middleware(handler)
 
-	// Test with valid credentials
+	// Test with valid token
 	req, _ := http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("user1", "pass1")
+	req.Header.Set("Authorization", "Bearer token1")
 	rr := httptest.NewRecorder()
 	wrappedHandler.ServeHTTP(rr, req)
 
@@ -220,9 +209,9 @@ func TestAuthenticationWithProvider(t *testing.T) {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
 	}
 
-	// Test with invalid credentials
+	// Test with invalid token
 	req, _ = http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("user1", "wrongpass")
+	req.Header.Set("Authorization", "Bearer wrongtoken")
 	rr = httptest.NewRecorder()
 	wrappedHandler.ServeHTTP(rr, req)
 
@@ -248,7 +237,7 @@ func TestAuthenticationFunction(t *testing.T) {
 	}
 
 	// Create a middleware
-	middleware := Authentication(authFunc)
+	middleware := AuthenticationBool(authFunc)
 
 	// Wrap the handler
 	wrappedHandler := middleware(handler)
@@ -276,39 +265,6 @@ func TestAuthenticationFunction(t *testing.T) {
 	}
 }
 
-func TestNewBasicAuthMiddleware(t *testing.T) {
-	// Create a logger
-	logger, _ := zap.NewDevelopment()
-
-	// Create a middleware
-	middleware := NewBasicAuthMiddleware(map[string]string{
-		"user1": "pass1",
-	}, logger)
-
-	// Create a handler
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("OK"))
-		if err != nil {
-			t.Fatalf("Failed to write response: %v", err)
-		}
-	})
-
-	// Wrap the handler
-	wrappedHandler := middleware(handler)
-
-	// Test with valid credentials
-	req, _ := http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("user1", "pass1")
-	rr := httptest.NewRecorder()
-	wrappedHandler.ServeHTTP(rr, req)
-
-	// Check status code
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
-	}
-}
-
 func TestNewBearerTokenMiddleware(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
@@ -320,6 +276,12 @@ func TestNewBearerTokenMiddleware(t *testing.T) {
 
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get the user ID from the context
+		userID, ok := GetUserID[bool](r)
+		if !ok || !userID {
+			t.Error("Expected user ID to be in context")
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
@@ -347,12 +309,18 @@ func TestNewBearerTokenValidatorMiddleware(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	// Create a middleware
-	middleware := NewBearerTokenValidatorMiddleware(func(token string) bool {
-		return token == "validtoken"
+	middleware := NewBearerTokenValidatorMiddleware(func(token string) (bool, bool) {
+		return token == "validtoken", token == "validtoken"
 	}, logger)
 
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get the user ID from the context
+		userID, ok := GetUserID[bool](r)
+		if !ok || !userID {
+			t.Error("Expected user ID to be in context")
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
@@ -386,6 +354,12 @@ func TestNewAPIKeyMiddleware(t *testing.T) {
 
 	// Create a handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get the user ID from the context
+		userID, ok := GetUserID[bool](r)
+		if !ok || !userID {
+			t.Error("Expected user ID to be in context")
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("OK"))
 		if err != nil {
@@ -415,5 +389,33 @@ func TestNewAPIKeyMiddleware(t *testing.T) {
 	// Check status code
 	if rr.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
+	}
+}
+
+func TestGetUserID(t *testing.T) {
+	// Create a request
+	req, _ := http.NewRequest("GET", "/", nil)
+
+	// Add a user ID to the context
+	ctx := context.WithValue(req.Context(), userIDContextKey[int64]{}, int64(123))
+	req = req.WithContext(ctx)
+
+	// Get the user ID from the context
+	userID, ok := GetUserID[int64](req)
+	if !ok || userID != 123 {
+		t.Error("Expected user ID to be in context")
+	}
+
+	// Test with wrong type
+	_, ok = GetUserID[string](req)
+	if ok {
+		t.Error("Expected GetUserID to return false for wrong type")
+	}
+
+	// Test with no user ID in context
+	req, _ = http.NewRequest("GET", "/", nil)
+	_, ok = GetUserID[int64](req)
+	if ok {
+		t.Error("Expected GetUserID to return false for no user ID in context")
 	}
 }

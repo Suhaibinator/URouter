@@ -189,8 +189,8 @@ func TestAuthentication(t *testing.T) {
 		}
 	})
 
-	// Wrap the handler with the Authentication middleware
-	authHandler := Authentication(authFunc)(handler)
+	// Wrap the handler with the AuthenticationBool middleware
+	authHandler := AuthenticationBool(authFunc)(handler)
 
 	// Create a request without authentication
 	req := httptest.NewRequest("GET", "/test", nil)

@@ -28,31 +28,21 @@ func main() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	// Define valid credentials for basic auth
-	basicAuthCredentials := map[string]string{
-		"user1": "password1",
-		"user2": "password2",
-	}
-
 	// Define valid tokens for bearer token auth
-	bearerTokens := map[string]bool{
-		"token1": true,
-		"token2": true,
+	bearerTokens := map[string]int64{
+		"token1": 34,
+		"token2": 35,
 	}
 
 	// Define valid API keys
-	apiKeys := map[string]bool{
-		"key1": true,
-		"key2": true,
+	apiKeys := map[string]int64{
+		"key1": 24,
+		"key2": 25,
 	}
 
 	// Create authentication middlewares
-	basicAuthMiddleware := middleware.NewBasicAuthMiddleware(basicAuthCredentials, logger)
 	bearerTokenMiddleware := middleware.NewBearerTokenMiddleware(bearerTokens, logger)
 	apiKeyMiddleware := middleware.NewAPIKeyMiddleware(apiKeys, "X-API-Key", "api_key", logger)
-	customAuthMiddleware := middleware.Authentication(func(r *http.Request) bool {
-		return r.Header.Get("X-Custom-Auth") == "secret"
-	})
 
 	// Create a router configuration
 	routerConfig := router.RouterConfig{
@@ -67,17 +57,6 @@ func main() {
 						Path:    "/resource",
 						Methods: []string{"GET"},
 						Handler: publicHandler,
-					},
-				},
-			},
-			{
-				PathPrefix: "/basic-auth",
-				Routes: []router.RouteConfigBase{
-					{
-						Path:        "/resource",
-						Methods:     []string{"GET"},
-						Middlewares: []router.Middleware{basicAuthMiddleware},
-						Handler:     protectedHandler,
 					},
 				},
 			},
@@ -99,17 +78,6 @@ func main() {
 						Path:        "/resource",
 						Methods:     []string{"GET"},
 						Middlewares: []router.Middleware{apiKeyMiddleware},
-						Handler:     protectedHandler,
-					},
-				},
-			},
-			{
-				PathPrefix: "/custom-auth",
-				Routes: []router.RouteConfigBase{
-					{
-						Path:        "/resource",
-						Methods:     []string{"GET"},
-						Middlewares: []router.Middleware{customAuthMiddleware},
 						Handler:     protectedHandler,
 					},
 				},
