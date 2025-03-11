@@ -271,7 +271,7 @@ This is important for security, as malicious clients could potentially spoof hea
 
 ### Rate Limiting
 
-SRouter provides a flexible rate limiting system that can be configured at the global, sub-router, or route level. Rate limits can be based on IP address, authenticated user, or custom criteria.
+SRouter provides a flexible rate limiting system that can be configured at the global, sub-router, or route level. Rate limits can be based on IP address, authenticated user, or custom criteria. Under the hood, SRouter uses [Uber's ratelimit library](https://github.com/uber-go/ratelimit) for efficient and smooth rate limiting with a leaky bucket algorithm.
 
 #### Rate Limiting Configuration
 
@@ -317,7 +317,7 @@ route := router.RouteConfigBase{
 
 SRouter supports several rate limiting strategies:
 
-1. **IP-based Rate Limiting**: Limits requests based on the client's IP address (extracted according to the IP configuration).
+1. **IP-based Rate Limiting**: Limits requests based on the client's IP address (extracted according to the IP configuration). The rate limiting is smooth, distributing requests evenly across the time window rather than allowing bursts.
 
 ```go
 RateLimit: &middleware.RateLimitConfig{

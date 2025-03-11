@@ -19,14 +19,14 @@ import (
 // Router is the main router struct that implements http.Handler.
 // It provides routing, middleware support, graceful shutdown, and other features.
 type Router struct {
-	config         RouterConfig
-	router         *httprouter.Router
-	logger         *zap.Logger
-	middlewares    []common.Middleware
-	rateLimitStore middleware.RateLimitStore
-	wg             sync.WaitGroup
-	shutdown       bool
-	shutdownMu     sync.RWMutex
+	config      RouterConfig
+	router      *httprouter.Router
+	logger      *zap.Logger
+	middlewares []common.Middleware
+	rateLimiter middleware.RateLimiter
+	wg          sync.WaitGroup
+	shutdown    bool
+	shutdownMu  sync.RWMutex
 }
 
 // contextKey is a type for context keys.
@@ -57,19 +57,16 @@ func NewRouter(config RouterConfig) *Router {
 		}
 	}
 
-	// Create an in-memory rate limit store
-	rateLimitStore := middleware.NewInMemoryRateLimitStore()
-
-	// Start a background task to clean up expired rate limit entries
-	rateLimitStore.StartCleanupTask(10 * time.Minute)
+	// Create a rate limiter using Uber's ratelimit library
+	rateLimiter := middleware.NewUberRateLimiter()
 
 	// Create the router
 	r := &Router{
-		config:         config,
-		router:         hr,
-		logger:         logger,
-		middlewares:    config.Middlewares,
-		rateLimitStore: rateLimitStore,
+		config:      config,
+		router:      hr,
+		logger:      logger,
+		middlewares: config.Middlewares,
+		rateLimiter: rateLimiter,
 	}
 
 	// Add IP middleware as the first middleware (before any other middleware)
@@ -286,7 +283,7 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, time
 
 	// Apply rate limiting middleware if configured
 	if rateLimit != nil {
-		h = middleware.RateLimit(rateLimit, r.rateLimitStore, r.logger)(h)
+		h = middleware.RateLimit(rateLimit, r.rateLimiter, r.logger)(h)
 	}
 
 	// Apply route-specific middlewares
