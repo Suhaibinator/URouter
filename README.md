@@ -1,6 +1,6 @@
 # SRouter
 
-SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) with advanced features like sub-router overrides, middleware support, and generic-based marshaling/unmarshaling.
+SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) with advanced features including sub-router overrides, middleware support, generic-based marshaling/unmarshaling, configurable timeouts, body size limits, authentication levels, Prometheus integration, and intelligent logging.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Suhaibinator/SRouter)](https://goreportcard.com/report/github.com/Suhaibinator/SRouter)
 [![GoDoc](https://godoc.org/github.com/Suhaibinator/SRouter?status.svg)](https://godoc.org/github.com/Suhaibinator/SRouter)
@@ -10,6 +10,7 @@ SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 ## Features
 
 - **High Performance**: Built on top of julienschmidt/httprouter for blazing-fast O(1) path matching
+- **Comprehensive Test Coverage**: Maintained at over 90% code coverage to ensure reliability
 - **Sub-Router Overrides**: Configure timeouts and body size limits at the global, sub-router, or route level
 - **Middleware Support**: Apply middleware at the global, sub-router, or route level with proper chaining
 - **Generic-Based Marshaling/Unmarshaling**: Use Go 1.18+ generics for type-safe request and response handling
