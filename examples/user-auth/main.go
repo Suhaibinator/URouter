@@ -141,9 +141,10 @@ func main() {
 				PathPrefix: "/public",
 				Routes: []router.RouteConfigBase{
 					{
-						Path:    "/resource",
-						Methods: []string{"GET"},
-						Handler: publicHandler,
+						Path:      "/resource",
+						Methods:   []string{"GET"},
+						AuthLevel: router.NoAuth,
+						Handler:   publicHandler,
 					},
 				},
 			},
@@ -151,8 +152,9 @@ func main() {
 				PathPrefix: "/boolean-auth",
 				Routes: []router.RouteConfigBase{
 					{
-						Path:    "/resource",
-						Methods: []string{"GET"},
+						Path:      "/resource",
+						Methods:   []string{"GET"},
+						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
 							middleware.Authentication(func(r *http.Request) bool {
 								// Simple boolean authentication
@@ -173,24 +175,27 @@ func main() {
 				PathPrefix: "/user-auth",
 				Routes: []router.RouteConfigBase{
 					{
-						Path:    "/custom",
-						Methods: []string{"GET"},
+						Path:      "/custom",
+						Methods:   []string{"GET"},
+						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
 							middleware.AuthenticationWithUser[User](customUserAuth),
 						},
 						Handler: protectedUserHandler,
 					},
 					{
-						Path:    "/bearer",
-						Methods: []string{"GET"},
+						Path:      "/bearer",
+						Methods:   []string{"GET"},
+						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
 							middleware.NewBearerTokenWithUserMiddleware[User](bearerTokenUserAuth, logger),
 						},
 						Handler: protectedUserHandler,
 					},
 					{
-						Path:    "/basic",
-						Methods: []string{"GET"},
+						Path:      "/basic",
+						Methods:   []string{"GET"},
+						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
 							middleware.NewBasicAuthWithUserMiddleware[User](basicAuthUserFunc, logger),
 						},
