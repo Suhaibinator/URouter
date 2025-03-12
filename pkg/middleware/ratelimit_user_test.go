@@ -28,8 +28,9 @@ func TestUserBasedRateLimiting(t *testing.T) {
 	config := &RateLimitConfig{
 		BucketName: "user-based",
 		Limit:      2,
+		UserIDType: UserIDTypeString,
 		Window:     time.Minute,
-		Strategy:   "user",
+		Strategy:   StrategyUser,
 	}
 
 	// Create a middleware with the config
@@ -39,41 +40,42 @@ func TestUserBasedRateLimiting(t *testing.T) {
 	handler := middleware(testHandler)
 
 	// Test with different users
-	users := []map[string]interface{}{
-		{"ID": "user1", "Name": "User One"},
-		{"ID": "user2", "Name": "User Two"},
+	userIds := []string{
+		"user1",
+		"user2",
+		"user3",
 	}
 
 	// Make requests for each user
-	for _, user := range users {
+	for _, userId := range userIds {
 		// First request for this user - should succeed
 		req1 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-		ctx1 := context.WithValue(req1.Context(), "user", user)
+		ctx1 := context.WithValue(req1.Context(), userIDContextKey[string]{}, userId)
 		req1 = req1.WithContext(ctx1)
 		rr1 := httptest.NewRecorder()
 		handler.ServeHTTP(rr1, req1)
 		if rr1.Code != http.StatusOK {
-			t.Errorf("User %s, Request 1: expected status %d, got %d", user["ID"], http.StatusOK, rr1.Code)
+			t.Errorf("User %s, Request 1: expected status %d, got %d", userId, http.StatusOK, rr1.Code)
 		}
 
 		// Second request for this user - should succeed
 		req2 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-		ctx2 := context.WithValue(req2.Context(), "user", user)
+		ctx2 := context.WithValue(req2.Context(), userIDContextKey[string]{}, userId)
 		req2 = req2.WithContext(ctx2)
 		rr2 := httptest.NewRecorder()
 		handler.ServeHTTP(rr2, req2)
 		if rr2.Code != http.StatusOK {
-			t.Errorf("User %s, Request 2: expected status %d, got %d", user["ID"], http.StatusOK, rr2.Code)
+			t.Errorf("User %s, Request 2: expected status %d, got %d", userId, http.StatusOK, rr2.Code)
 		}
 
 		// Third request for this user - should be rate limited
 		req3 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-		ctx3 := context.WithValue(req3.Context(), "user", user)
+		ctx3 := context.WithValue(req3.Context(), userIDContextKey[string]{}, userId)
 		req3 = req3.WithContext(ctx3)
 		rr3 := httptest.NewRecorder()
 		handler.ServeHTTP(rr3, req3)
 		if rr3.Code != http.StatusTooManyRequests {
-			t.Errorf("User %s, Request 3: expected status %d, got %d", user["ID"], http.StatusTooManyRequests, rr3.Code)
+			t.Errorf("User %s, Request 3: expected status %d, got %d", userId, http.StatusTooManyRequests, rr3.Code)
 		}
 	}
 
@@ -92,16 +94,16 @@ func TestExtractUser(t *testing.T) {
 	// Test with user in context
 	req1 := httptest.NewRequest("GET", "http://example.com/foo", nil)
 	user := map[string]interface{}{"ID": "user1", "Name": "User One"}
-	ctx1 := context.WithValue(req1.Context(), "user", user)
+	ctx1 := context.WithValue(req1.Context(), userIDContextKey[string]{}, user)
 	req1 = req1.WithContext(ctx1)
-	userID := extractUser(req1)
+	userID := extractUser(req1, nil)
 	if userID != "user1" {
 		t.Errorf("Expected user ID 'user1', got '%s'", userID)
 	}
 
 	// Test with no user in context
 	req2 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	userID = extractUser(req2)
+	userID = extractUser(req2, nil)
 	if userID != "" {
 		t.Errorf("Expected empty user ID, got '%s'", userID)
 	}
@@ -109,9 +111,9 @@ func TestExtractUser(t *testing.T) {
 	// Test with user in context but no ID field
 	req3 := httptest.NewRequest("GET", "http://example.com/foo", nil)
 	userWithoutID := map[string]interface{}{"Name": "User One"}
-	ctx3 := context.WithValue(req3.Context(), "user", userWithoutID)
+	ctx3 := context.WithValue(req3.Context(), userIDContextKey[string]{}, userWithoutID)
 	req3 = req3.WithContext(ctx3)
-	userID = extractUser(req3)
+	userID = extractUser(req3, nil)
 	if userID != "" {
 		t.Errorf("Expected empty user ID, got '%s'", userID)
 	}
@@ -119,9 +121,9 @@ func TestExtractUser(t *testing.T) {
 	// Test with user in context but ID is not a string (should be converted to string)
 	req4 := httptest.NewRequest("GET", "http://example.com/foo", nil)
 	userWithNonStringID := map[string]interface{}{"ID": 123, "Name": "User One"}
-	ctx4 := context.WithValue(req4.Context(), "user", userWithNonStringID)
+	ctx4 := context.WithValue(req4.Context(), userIDContextKey[string]{}, userWithNonStringID)
 	req4 = req4.WithContext(ctx4)
-	userID = extractUser(req4)
+	userID = extractUser(req4, nil)
 	if userID != "123" {
 		t.Errorf("Expected user ID '123', got '%s'", userID)
 	}
@@ -129,9 +131,9 @@ func TestExtractUser(t *testing.T) {
 	// Test with user in context but not a map
 	req5 := httptest.NewRequest("GET", "http://example.com/foo", nil)
 	nonMapUser := "user1"
-	ctx5 := context.WithValue(req5.Context(), "user", nonMapUser)
+	ctx5 := context.WithValue(req5.Context(), userIDContextKey[string]{}, nonMapUser)
 	req5 = req5.WithContext(ctx5)
-	userID = extractUser(req5)
+	userID = extractUser(req5, nil)
 	if userID != "" {
 		t.Errorf("Expected empty user ID, got '%s'", userID)
 	}

@@ -13,6 +13,34 @@ import (
 	"go.uber.org/zap"
 )
 
+type RateLimitStrategy int
+
+const (
+	// StrategyIP uses the client's IP address as the key for rate limiting
+	StrategyIP RateLimitStrategy = iota
+	// StrategyUser uses the authenticated user's ID as the key for rate limiting
+	StrategyUser
+	// StrategyCustom uses a custom key extractor function for rate limiting
+	StrategyCustom
+)
+
+// UserIDType represents the type of user ID used for rate limiting
+type UserIDType int
+
+const (
+	UserIDTypeUnknown UserIDType = iota
+	// UserIDTypeString indicates that the user ID is a string
+	UserIDTypeString
+	// UserIDTypeInt indicates that the user ID is an int
+	UserIDTypeInt
+	// UserIDTypeInt64 indicates that the user ID is an int64
+	UserIDTypeInt64
+	// UserIDTypeFloat64 indicates that the user ID is a float64
+	UserIDTypeFloat64
+	// UserIDTypeBool indicates that the user ID is a bool
+	UserIDTypeBool
+)
+
 // RateLimitConfig defines configuration for rate limiting
 type RateLimitConfig struct {
 	// Unique identifier for this rate limit bucket
@@ -29,7 +57,11 @@ type RateLimitConfig struct {
 	// - "ip": Use client IP address
 	// - "user": Use authenticated user ID
 	// - "custom": Use a custom key extractor
-	Strategy string
+	Strategy RateLimitStrategy
+
+	// Type of user ID to use for rate limiting (only used when Strategy is StrategyUser)
+	// This allows for efficient user ID extraction without trying multiple types
+	UserIDType UserIDType
 
 	// Custom key extractor function (used when Strategy is "custom")
 	// This allows for complex rate limiting scenarios
@@ -194,27 +226,75 @@ func extractIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
+// extractUserWithType extracts the user ID from the request context using the specified user ID type
+// This function uses type information to efficiently retrieve the user ID without trying multiple types
+func extractUserWithType(r *http.Request, idType UserIDType) string {
+	// Use the specified user ID type to efficiently retrieve the user ID
+	switch idType {
+	case UserIDTypeString:
+		if userID, ok := GetUserID[string](r); ok && userID != "" {
+			return userID
+		}
+	case UserIDTypeInt:
+		if userID, ok := GetUserID[int](r); ok {
+			return strconv.Itoa(userID)
+		}
+	case UserIDTypeInt64:
+		if userID, ok := GetUserID[int64](r); ok {
+			return strconv.FormatInt(userID, 10)
+		}
+	case UserIDTypeFloat64:
+		if userID, ok := GetUserID[float64](r); ok {
+			return strconv.FormatFloat(userID, 'f', -1, 64)
+		}
+	case UserIDTypeBool:
+		if userID, ok := GetUserID[bool](r); ok {
+			return strconv.FormatBool(userID)
+		}
+	}
+
+	// If we couldn't get the user ID using the specified type, return an empty string
+	return ""
+}
+
 // extractUser extracts the user ID from the request context
-// This is a generic function that works with any user type that has an ID field
-func extractUser(r *http.Request) string {
-	// First, try to get the user ID using the router's GetUserID function
-	// This works with the authentication middleware we've implemented
+// This function tries different approaches to retrieve the user ID
+func extractUser(r *http.Request, config *RateLimitConfig) string {
+	// If a user ID type is specified in the config, use it for efficient extraction
+	if config != nil && config.Strategy == StrategyUser && config.UserIDType != UserIDTypeUnknown {
+		if userID := extractUserWithType(r, config.UserIDType); userID != "" {
+			return userID
+		}
+	}
+
+	// If no user ID type is specified or extraction failed, try all common types
+	// This is for backward compatibility with existing code
+
+	// Check for string user ID (most common)
 	if userID, ok := GetUserID[string](r); ok && userID != "" {
 		return userID
 	}
 
-	// Try to get the user from the context
-	// This is a simplified implementation that assumes the user is stored in the context
-	// In a real implementation, you would need to handle different user types
-	// We check for common context keys used for storing user information
+	// Check for int user ID
+	if userID, ok := GetUserID[int](r); ok {
+		return strconv.Itoa(userID)
+	}
+
+	// Check for int64 user ID
+	if userID, ok := GetUserID[int64](r); ok {
+		return strconv.FormatInt(userID, 10)
+	}
+
+	// If we couldn't get the user ID using GetUserID, try to get the user from the context
+	// This is for backward compatibility with code that doesn't use our authentication middleware
 	var user interface{}
 
 	// Check for user in context with various common keys
+	// This is the approach used in the tests
 	for _, key := range []interface{}{
 		"user",                        // String key (common in many frameworks)
 		"user_context",                // Another common string key
 		struct{ name string }{"user"}, // Empty struct key with name field (used in some Go code)
-		userIDContextKey[string]{},    // Our custom context key for user IDs
 	} {
 		if u := r.Context().Value(key); u != nil {
 			user = u
@@ -229,8 +309,8 @@ func extractUser(r *http.Request) string {
 			return ""
 		}
 
-		// Try to get the ID field using reflection
-		if userMap, ok := user.(map[string]interface{}); ok {
+		// Try to get the ID field using type assertions
+		if userMap, ok := user.(map[string]any); ok {
 			if id, ok := userMap["ID"]; ok {
 				// Convert ID to string regardless of its type
 				switch v := id.(type) {
@@ -238,6 +318,8 @@ func extractUser(r *http.Request) string {
 					return v
 				case int:
 					return strconv.Itoa(v)
+				case int64:
+					return strconv.FormatInt(v, 10)
 				case float64:
 					return strconv.FormatFloat(v, 'f', -1, 64)
 				case bool:
@@ -269,15 +351,15 @@ func RateLimit(config *RateLimitConfig, limiter RateLimiter, logger *zap.Logger)
 			var err error
 
 			switch config.Strategy {
-			case "ip":
+			case StrategyIP:
 				key = extractIP(r)
-			case "user":
-				key = extractUser(r)
+			case StrategyUser:
+				key = extractUser(r, config)
 				// If no user is found and strategy is user, fall back to IP
 				if key == "" {
 					key = extractIP(r)
 				}
-			case "custom":
+			case StrategyCustom:
 				if config.KeyExtractor != nil {
 					key, err = config.KeyExtractor(r)
 					if err != nil {

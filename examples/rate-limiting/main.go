@@ -175,7 +175,7 @@ func main() {
 					BucketName:      "auth-endpoints",
 					Limit:           5,
 					Window:          time.Minute,
-					Strategy:        "ip",
+					Strategy:        middleware.StrategyUser,
 					ExceededHandler: http.HandlerFunc(rateLimitExceededHandler),
 				},
 				Handler: loginHandler,
@@ -195,7 +195,7 @@ func main() {
 					BucketName: "user-profile",
 					Limit:      10,
 					Window:     time.Minute,
-					Strategy:   "user",
+					Strategy:   middleware.StrategyUser,
 				},
 				Middlewares: []router.Middleware{
 					authMiddleware,
@@ -210,7 +210,7 @@ func main() {
 					BucketName: "public-endpoints",
 					Limit:      20,
 					Window:     time.Minute,
-					Strategy:   "ip",
+					Strategy:   middleware.StrategyIP,
 				},
 				Handler: publicEndpointHandler,
 			},
@@ -225,7 +225,7 @@ func main() {
 			BucketName: "global",
 			Limit:      100,
 			Window:     time.Minute,
-			Strategy:   "ip",
+			Strategy:   middleware.StrategyIP,
 		},
 		// Configure IP extraction to use X-Forwarded-For header
 		IPConfig: &middleware.IPConfig{

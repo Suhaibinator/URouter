@@ -36,7 +36,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "very-low-limit",
 				Limit:      1,
 				Window:     time.Minute,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       3,
 			requestDelay:   0,
@@ -48,7 +48,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "very-high-limit",
 				Limit:      1000,
 				Window:     time.Second,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       5,
 			requestDelay:   0,
@@ -60,7 +60,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "very-short-window",
 				Limit:      2,
 				Window:     100 * time.Millisecond,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       3,
 			requestDelay:   0,
@@ -72,7 +72,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "window-reset",
 				Limit:      1,
 				Window:     100 * time.Millisecond,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       3,
 			requestDelay:   150 * time.Millisecond, // Longer than the window
@@ -84,7 +84,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "",
 				Limit:      2,
 				Window:     time.Minute,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       3,
 			requestDelay:   0,
@@ -96,7 +96,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "zero-limit",
 				Limit:      0, // This should be treated as 1
 				Window:     time.Minute,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       2,
 			requestDelay:   0,
@@ -108,7 +108,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "zero-window",
 				Limit:      1,
 				Window:     0, // This should be treated as 1 second
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       2,
 			requestDelay:   0,
@@ -120,7 +120,7 @@ func TestRateLimitEdgeCases(t *testing.T) {
 				BucketName: "unknown-strategy",
 				Limit:      1,
 				Window:     time.Minute,
-				Strategy:   "unknown",
+				Strategy:   RateLimitStrategy(4), // Invalid strategy, should default to IP
 			},
 			requests:       2,
 			requestDelay:   0,
@@ -180,7 +180,7 @@ func TestCustomKeyExtractorErrors(t *testing.T) {
 		BucketName: "error-extractor",
 		Limit:      10,
 		Window:     time.Minute,
-		Strategy:   "custom",
+		Strategy:   StrategyCustom,
 		KeyExtractor: func(r *http.Request) (string, error) {
 			return "", fmt.Errorf("simulated error")
 		},
@@ -225,14 +225,14 @@ func TestSharedBuckets(t *testing.T) {
 		BucketName: "shared-bucket",
 		Limit:      2,
 		Window:     time.Minute,
-		Strategy:   "ip",
+		Strategy:   StrategyIP,
 	}
 
 	config2 := &RateLimitConfig{
 		BucketName: "shared-bucket",
 		Limit:      2, // Same limit as config1
 		Window:     time.Minute,
-		Strategy:   "ip",
+		Strategy:   StrategyIP,
 	}
 
 	// Create middleware for each config
@@ -306,7 +306,7 @@ func TestCustomExceededHandler(t *testing.T) {
 		BucketName:      "custom-handler",
 		Limit:           1,
 		Window:          time.Minute,
-		Strategy:        "ip",
+		Strategy:        StrategyIP,
 		ExceededHandler: customExceededHandler,
 	}
 

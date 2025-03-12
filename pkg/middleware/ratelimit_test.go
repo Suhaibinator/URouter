@@ -41,7 +41,7 @@ func TestRateLimit(t *testing.T) {
 				BucketName: "test-not-exceeded",
 				Limit:      5,
 				Window:     time.Minute,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       5,
 			expectedStatus: []int{200, 200, 200, 200, 200},
@@ -52,7 +52,7 @@ func TestRateLimit(t *testing.T) {
 				BucketName: "test-exceeded",
 				Limit:      3,
 				Window:     time.Minute,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 			},
 			requests:       5,
 			expectedStatus: []int{200, 200, 200, 429, 429},
@@ -63,7 +63,7 @@ func TestRateLimit(t *testing.T) {
 				BucketName: "test-custom-handler",
 				Limit:      2,
 				Window:     time.Minute,
-				Strategy:   "ip",
+				Strategy:   StrategyIP,
 				ExceededHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusServiceUnavailable)
 					_, _ = w.Write([]byte("Custom Error"))
@@ -246,7 +246,7 @@ func TestCustomKeyExtractor(t *testing.T) {
 		BucketName: "test-custom-extractor",
 		Limit:      2,
 		Window:     time.Minute,
-		Strategy:   "custom",
+		Strategy:   StrategyCustom,
 		KeyExtractor: func(r *http.Request) (string, error) {
 			return r.URL.Query().Get("api_key"), nil
 		},
