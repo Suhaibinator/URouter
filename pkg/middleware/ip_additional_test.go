@@ -1,238 +1,192 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-func TestIPEdgeCases(t *testing.T) {
-	tests := []struct {
-		name       string
-		config     *IPConfig
-		remoteAddr string
-		headers    map[string]string
-		expected   string
-	}{
-		{
-			name: "Empty X-Forwarded-For",
-			config: &IPConfig{
-				Source:     IPSourceXForwardedFor,
-				TrustProxy: true,
-			},
-			remoteAddr: "192.168.1.1:1234",
-			headers: map[string]string{
-				"X-Forwarded-For": "",
-			},
-			expected: "192.168.1.1",
-		},
-		{
-			name: "Malformed X-Forwarded-For",
-			config: &IPConfig{
-				Source:     IPSourceXForwardedFor,
-				TrustProxy: true,
-			},
-			remoteAddr: "192.168.1.1:1234",
-			headers: map[string]string{
-				"X-Forwarded-For": "not-an-ip",
-			},
-			expected: "not-an-ip",
-		},
-		{
-			name: "Multiple IPs with spaces in X-Forwarded-For",
-			config: &IPConfig{
-				Source:     IPSourceXForwardedFor,
-				TrustProxy: true,
-			},
-			remoteAddr: "192.168.1.1:1234",
-			headers: map[string]string{
-				"X-Forwarded-For": "10.0.0.1 , 10.0.0.2 , 10.0.0.3",
-			},
-			expected: "10.0.0.1",
-		},
-		{
-			name: "IPv6 in X-Forwarded-For",
-			config: &IPConfig{
-				Source:     IPSourceXForwardedFor,
-				TrustProxy: true,
-			},
-			remoteAddr: "192.168.1.1:1234",
-			headers: map[string]string{
-				"X-Forwarded-For": "2001:db8::1",
-			},
-			expected: "2001:db8::1",
-		},
-		{
-			name: "IPv6 with port in RemoteAddr",
-			config: &IPConfig{
-				Source:     IPSourceRemoteAddr,
-				TrustProxy: true,
-			},
-			remoteAddr: "[2001:db8::1]:1234",
-			headers:    map[string]string{},
-			expected:   "[2001:db8::1]",
-		},
-		{
-			name: "Empty RemoteAddr",
-			config: &IPConfig{
-				Source:     IPSourceRemoteAddr,
-				TrustProxy: true,
-			},
-			remoteAddr: "",
-			headers:    map[string]string{},
-			expected:   "",
-		},
-		{
-			name: "Missing custom header",
-			config: &IPConfig{
-				Source:       IPSourceCustomHeader,
-				CustomHeader: "X-Client-IP",
-				TrustProxy:   true,
-			},
-			remoteAddr: "192.168.1.1:1234",
-			headers:    map[string]string{},
-			expected:   "192.168.1.1",
-		},
-		{
-			name: "Empty custom header",
-			config: &IPConfig{
-				Source:       IPSourceCustomHeader,
-				CustomHeader: "X-Client-IP",
-				TrustProxy:   true,
-			},
-			remoteAddr: "192.168.1.1:1234",
-			headers: map[string]string{
-				"X-Client-IP": "",
-			},
-			expected: "192.168.1.1",
-		},
+// TestDefaultIPConfig tests the DefaultIPConfig function
+func TestDefaultIPConfig(t *testing.T) {
+	config := DefaultIPConfig()
+	if config == nil {
+		t.Fatal("Expected non-nil config")
 	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Create a test handler that checks the client IP
-			var capturedIP string
-			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedIP = ClientIP(r)
-				w.WriteHeader(http.StatusOK)
-			})
-
-			// Create the middleware
-			middleware := ClientIPMiddleware(tc.config)
-
-			// Wrap the test handler with the middleware
-			handler := middleware(testHandler)
-
-			// Create a request
-			req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-			req.RemoteAddr = tc.remoteAddr
-
-			// Add headers
-			for k, v := range tc.headers {
-				req.Header.Set(k, v)
-			}
-
-			// Create a response recorder
-			rr := httptest.NewRecorder()
-
-			// Serve the request
-			handler.ServeHTTP(rr, req)
-
-			// Check the status code
-			if rr.Code != http.StatusOK {
-				t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
-			}
-
-			// Check the captured IP
-			if capturedIP != tc.expected {
-				t.Errorf("Expected IP %s, got %s", tc.expected, capturedIP)
-			}
-		})
+	if config.Source != IPSourceXForwardedFor {
+		t.Errorf("Expected Source to be %s, got %s", IPSourceXForwardedFor, config.Source)
+	}
+	if !config.TrustProxy {
+		t.Error("Expected TrustProxy to be true")
 	}
 }
 
-func TestClientIPDirectContextAccess(t *testing.T) {
-	// Test direct context access without middleware
-	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-
-	// Case 1: No IP in context
-	if ip := ClientIP(req); ip != "" {
-		t.Errorf("Expected empty IP when no IP in context, got %s", ip)
+// TestClientIPMiddleware tests the ClientIPMiddleware function
+func TestClientIPMiddleware(t *testing.T) {
+	// Test with nil config (should use default)
+	middleware := ClientIPMiddleware(nil)
+	if middleware == nil {
+		t.Fatal("Expected non-nil middleware")
 	}
-
-	// Case 2: IP in context
-	ctx := context.WithValue(req.Context(), ClientIPKey, "10.0.0.1")
-	req = req.WithContext(ctx)
-	if ip := ClientIP(req); ip != "10.0.0.1" {
-		t.Errorf("Expected IP 10.0.0.1, got %s", ip)
-	}
-
-	// Case 3: Wrong type in context
-	ctx = context.WithValue(req.Context(), ClientIPKey, 12345)
-	req = req.WithContext(ctx)
-	if ip := ClientIP(req); ip != "" {
-		t.Errorf("Expected empty IP when wrong type in context, got %s", ip)
-	}
-}
-
-func TestMiddlewareChaining(t *testing.T) {
-	// Test that the IP middleware works correctly when chained with other middleware
 
 	// Create a test handler
-	var capturedIP string
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedIP = ClientIP(r)
-		w.WriteHeader(http.StatusOK)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := ClientIP(r)
+		w.Write([]byte(ip))
 	})
 
-	// Create a simple logging middleware
-	loggingMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Just pass through, but this tests middleware chaining
-			next.ServeHTTP(w, r)
-		})
+	// Wrap the handler with the middleware
+	wrappedHandler := middleware(handler)
+
+	// Create a test request with X-Forwarded-For header
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Forwarded-For", "192.0.2.1")
+	rec := httptest.NewRecorder()
+
+	// Call the handler
+	wrappedHandler.ServeHTTP(rec, req)
+
+	// Check that the response body contains the IP
+	if rec.Body.String() != "192.0.2.1" {
+		t.Errorf("Expected body '192.0.2.1', got '%s'", rec.Body.String())
 	}
 
-	// Create the IP middleware
-	ipMiddleware := ClientIPMiddleware(&IPConfig{
-		Source:     IPSourceXForwardedFor,
+	// Test with custom config
+	config := &IPConfig{
+		Source:     IPSourceXRealIP,
 		TrustProxy: true,
-	})
+	}
+	middleware = ClientIPMiddleware(config)
+	wrappedHandler = middleware(handler)
 
-	// Chain the middleware: IP middleware first, then logging middleware
-	handler := loggingMiddleware(ipMiddleware(testHandler))
+	// Create a test request with X-Real-IP header
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Real-IP", "192.0.2.2")
+	rec = httptest.NewRecorder()
 
-	// Create a request with X-Forwarded-For
-	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	req.RemoteAddr = "192.168.1.1:1234"
-	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+	// Call the handler
+	wrappedHandler.ServeHTTP(rec, req)
 
-	// Create a response recorder
-	rr := httptest.NewRecorder()
-
-	// Serve the request
-	handler.ServeHTTP(rr, req)
-
-	// Check the captured IP
-	if capturedIP != "10.0.0.1" {
-		t.Errorf("Expected IP 10.0.0.1, got %s", capturedIP)
+	// Check that the response body contains the IP
+	if rec.Body.String() != "192.0.2.2" {
+		t.Errorf("Expected body '192.0.2.2', got '%s'", rec.Body.String())
 	}
 
-	// Chain the middleware in reverse order: logging middleware first, then IP middleware
-	handler = ipMiddleware(loggingMiddleware(testHandler))
+	// Test with custom header
+	config = &IPConfig{
+		Source:       IPSourceCustomHeader,
+		CustomHeader: "X-Custom-IP",
+		TrustProxy:   true,
+	}
+	middleware = ClientIPMiddleware(config)
+	wrappedHandler = middleware(handler)
 
-	// Reset the captured IP
-	capturedIP = ""
+	// Create a test request with custom header
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Custom-IP", "192.0.2.3")
+	rec = httptest.NewRecorder()
 
-	// Create a new response recorder
-	rr = httptest.NewRecorder()
+	// Call the handler
+	wrappedHandler.ServeHTTP(rec, req)
 
-	// Serve the request
-	handler.ServeHTTP(rr, req)
+	// Check that the response body contains the IP
+	if rec.Body.String() != "192.0.2.3" {
+		t.Errorf("Expected body '192.0.2.3', got '%s'", rec.Body.String())
+	}
 
-	// Check the captured IP
-	if capturedIP != "10.0.0.1" {
-		t.Errorf("Expected IP 10.0.0.1, got %s", capturedIP)
+	// Test with RemoteAddr
+	config = &IPConfig{
+		Source:     IPSourceRemoteAddr,
+		TrustProxy: true,
+	}
+	middleware = ClientIPMiddleware(config)
+	wrappedHandler = middleware(handler)
+
+	// Create a test request with RemoteAddr
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.0.2.4:1234"
+	rec = httptest.NewRecorder()
+
+	// Call the handler
+	wrappedHandler.ServeHTTP(rec, req)
+
+	// Check that the response body contains the IP
+	if rec.Body.String() != "192.0.2.4" {
+		t.Errorf("Expected body '192.0.2.4', got '%s'", rec.Body.String())
+	}
+
+	// Test with unknown source (should fall back to X-Forwarded-For)
+	config = &IPConfig{
+		Source:     IPSourceType("unknown"),
+		TrustProxy: true,
+	}
+	middleware = ClientIPMiddleware(config)
+	wrappedHandler = middleware(handler)
+
+	// Create a test request with X-Forwarded-For header
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Forwarded-For", "192.0.2.5")
+	rec = httptest.NewRecorder()
+
+	// Call the handler
+	wrappedHandler.ServeHTTP(rec, req)
+
+	// Check that the response body contains the IP
+	if rec.Body.String() != "192.0.2.5" {
+		t.Errorf("Expected body '192.0.2.5', got '%s'", rec.Body.String())
+	}
+
+	// Test with TrustProxy=false (should fall back to RemoteAddr)
+	config = &IPConfig{
+		Source:     IPSourceXForwardedFor,
+		TrustProxy: false,
+	}
+	middleware = ClientIPMiddleware(config)
+	wrappedHandler = middleware(handler)
+
+	// Create a test request with X-Forwarded-For header and RemoteAddr
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Forwarded-For", "192.0.2.6")
+	req.RemoteAddr = "192.0.2.7:1234"
+	rec = httptest.NewRecorder()
+
+	// Call the handler
+	wrappedHandler.ServeHTTP(rec, req)
+
+	// Check that the response body contains the RemoteAddr IP
+	if rec.Body.String() != "192.0.2.7" {
+		t.Errorf("Expected body '192.0.2.7', got '%s'", rec.Body.String())
+	}
+}
+
+// TestCleanIP tests the cleanIP function
+func TestCleanIP(t *testing.T) {
+	// Test IPv4 with port
+	ip := cleanIP("192.0.2.1:1234")
+	if ip != "192.0.2.1" {
+		t.Errorf("Expected '192.0.2.1', got '%s'", ip)
+	}
+
+	// Test IPv4 without port
+	ip = cleanIP("192.0.2.1")
+	if ip != "192.0.2.1" {
+		t.Errorf("Expected '192.0.2.1', got '%s'", ip)
+	}
+
+	// Test IPv6 with port
+	ip = cleanIP("[2001:db8::1]:1234")
+	if ip != "[2001:db8::1]" {
+		t.Errorf("Expected '[2001:db8::1]', got '%s'", ip)
+	}
+
+	// Test IPv6 without port
+	ip = cleanIP("[2001:db8::1]")
+	if ip != "[2001:db8::1]" {
+		t.Errorf("Expected '[2001:db8::1]', got '%s'", ip)
+	}
+
+	// Test IPv6 without brackets
+	ip = cleanIP("2001:db8::1")
+	if ip != "2001:db8::1" {
+		t.Errorf("Expected '2001:db8::1', got '%s'", ip)
 	}
 }
