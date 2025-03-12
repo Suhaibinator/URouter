@@ -374,7 +374,7 @@ func TestLoggingMiddlewareWithFlusher(t *testing.T) {
 	// Create a handler that calls Flush
 	wrappedHandler := LoggingMiddleware(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 
 		// Check if the response writer implements http.Flusher
 		if f, ok := w.(http.Flusher); ok {
