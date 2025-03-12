@@ -382,7 +382,7 @@ func TestAuthenticationWithUser(t *testing.T) {
 	}
 
 	// Create a middleware
-	middleware := AuthenticationWithUser[User](authFunc)
+	middleware := AuthenticationWithUser(authFunc)
 
 	// Wrap the handler
 	wrappedHandler := middleware(handler)
@@ -525,7 +525,7 @@ func TestNewAPIKeyWithUserMiddleware(t *testing.T) {
 	logger, _ := zap.NewDevelopment()
 
 	// Create a middleware
-	middleware := NewAPIKeyWithUserMiddleware[User](
+	middleware := NewAPIKeyWithUserMiddleware(
 		func(key string) (*User, error) {
 			if key == "key1" {
 				return &User{

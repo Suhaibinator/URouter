@@ -31,7 +31,7 @@ func TestMetrics(t *testing.T) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	}, authFunction, userIdFromUserFunction)
@@ -122,7 +122,7 @@ func TestTracing(t *testing.T) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger:        logger,
 		EnableTracing: true,
 	}, authFunction, userIdFromUserFunction)

@@ -22,7 +22,7 @@ func TestRouteMatching(t *testing.T) {
 	logger, _ := zap.NewProduction()
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 		SubRouters: []SubRouterConfig{
 			{
@@ -85,7 +85,7 @@ func TestSubRouterOverrides(t *testing.T) {
 	logger, _ := zap.NewProduction()
 
 	// Create a router with a global timeout of 1 second and string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 1 * time.Second,
 		SubRouters: []SubRouterConfig{
@@ -168,7 +168,7 @@ func TestBodySizeLimits(t *testing.T) {
 	logger := zap.NewNop()
 
 	// Create a router with a global max body size of 10 bytes and string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger:            logger,
 		GlobalMaxBodySize: 10,
 		SubRouters: []SubRouterConfig{
@@ -272,7 +272,7 @@ func TestJSONCodec(t *testing.T) {
 	logger, _ := zap.NewProduction()
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
@@ -285,7 +285,7 @@ func TestJSONCodec(t *testing.T) {
 		})
 
 	// Register a generic JSON route
-	RegisterGenericRoute[RouterTestRequest, RouterTestResponse, string](r, RouteConfig[RouterTestRequest, RouterTestResponse]{
+	RegisterGenericRoute(r, RouteConfig[RouterTestRequest, RouterTestResponse]{
 		Path:    "/greet",
 		Methods: []string{"POST"},
 		Codec:   codec.NewJSONCodec[RouterTestRequest, RouterTestResponse](),
@@ -340,7 +340,7 @@ func TestMiddlewareChaining(t *testing.T) {
 	}
 
 	// Create a router with global middleware and string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 		Middlewares: []common.Middleware{
 			addHeaderMiddleware("Global", "true"),
@@ -413,7 +413,7 @@ func TestShutdown(t *testing.T) {
 	logger, _ := zap.NewProduction()
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid

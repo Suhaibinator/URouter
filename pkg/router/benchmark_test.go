@@ -32,7 +32,7 @@ func BenchmarkRouterSimple(b *testing.B) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	}, authFunction, userIdFromUserFunction)
 
@@ -84,7 +84,7 @@ func BenchmarkRouterWithParams(b *testing.B) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	}, authFunction, userIdFromUserFunction)
 
@@ -148,7 +148,7 @@ func BenchmarkRouterWithMiddleware(b *testing.B) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 		Middlewares: []Middleware{
 			addHeaderMiddleware("X-Global", "true"),
@@ -206,7 +206,7 @@ func BenchmarkRouterWithTimeout(b *testing.B) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 1 * time.Second,
 	}, authFunction, userIdFromUserFunction)
@@ -259,7 +259,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	}, authFunction, userIdFromUserFunction)
 
@@ -327,7 +327,7 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 	}
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	}, authFunction, userIdFromUserFunction)
 

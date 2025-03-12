@@ -110,8 +110,8 @@ func TestExtractUser(t *testing.T) {
 
 	// Test with user in context but ID is not a string (should be converted to string)
 	req4 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	userWithNonStringID := "123"
-	ctx4 := context.WithValue(req4.Context(), userIDContextKey[string]{}, userWithNonStringID)
+	userWithNonStringID := 123
+	ctx4 := context.WithValue(req4.Context(), userIDContextKey[int]{}, userWithNonStringID)
 	req4 = req4.WithContext(ctx4)
 	userID = extractUser(req4, nil)
 	if userID != "123" {

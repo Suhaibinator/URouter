@@ -22,7 +22,7 @@ func TestPrometheusConfig(t *testing.T) {
 	registry := prometheus.NewRegistry()
 
 	// Create a router with Prometheus config and string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		PrometheusConfig: &PrometheusConfig{
 			Registry:         registry,
 			Namespace:        "test",
@@ -64,7 +64,7 @@ func TestGenericRouteDecodeError(t *testing.T) {
 	logger := zap.New(core)
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
@@ -85,7 +85,7 @@ func TestGenericRouteDecodeError(t *testing.T) {
 	}
 
 	// Register a generic route
-	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
 		Path:      "/greet",
 		Methods:   []string{"POST"},
 		AuthLevel: NoAuth, // No authentication required
@@ -136,7 +136,7 @@ func TestSlowRequestLogging(t *testing.T) {
 	logger := zap.New(core)
 
 	// Create a router with metrics enabled and string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	},
@@ -205,7 +205,7 @@ func TestErrorStatusLogging(t *testing.T) {
 	logger := zap.New(core)
 
 	// Create a router with metrics enabled and string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	},
@@ -271,7 +271,7 @@ func TestErrorStatusLogging(t *testing.T) {
 	logger = zap.New(core)
 
 	// Create a new router with the new logger and string as both the user ID and user type
-	r = NewRouter[string, string](RouterConfig{
+	r = NewRouter(RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	},
@@ -364,7 +364,7 @@ func TestAuthMiddleware(t *testing.T) {
 	logger := zap.NewNop()
 
 	// Create a router with string as both the user ID and user type
-	r := NewRouter[string, string](RouterConfig{
+	r := NewRouter(RouterConfig{
 		Logger: logger,
 	},
 		// Mock auth function that validates "token"

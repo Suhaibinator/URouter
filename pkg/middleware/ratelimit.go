@@ -24,54 +24,6 @@ const (
 	StrategyCustom
 )
 
-// UserIDType represents the type of user ID used for rate limiting
-type UserIDType int
-
-const (
-	UserIDTypeUnknown UserIDType = iota
-	// UserIDTypeString indicates that the user ID is a string
-	UserIDTypeString
-	// UserIDTypeInt indicates that the user ID is an int
-	UserIDTypeInt
-	// UserIDTypeInt64 indicates that the user ID is an int64
-	UserIDTypeInt64
-	// UserIDTypeFloat64 indicates that the user ID is a float64
-	UserIDTypeFloat64
-	// UserIDTypeBool indicates that the user ID is a bool
-	UserIDTypeBool
-)
-
-// RateLimitConfig defines configuration for rate limiting
-type RateLimitConfig struct {
-	// Unique identifier for this rate limit bucket
-	// If multiple routes/subrouters share the same BucketName, they share the same rate limit
-	BucketName string
-
-	// Maximum number of requests allowed in the time window
-	Limit int
-
-	// Time window for the rate limit (e.g., 1 minute, 1 hour)
-	Window time.Duration
-
-	// Strategy for identifying clients (IP, User, Custom)
-	// - "ip": Use client IP address
-	// - "user": Use authenticated user ID
-	// - "custom": Use a custom key extractor
-	Strategy RateLimitStrategy
-
-	// Type of user ID to use for rate limiting (only used when Strategy is StrategyUser)
-	// This allows for efficient user ID extraction without trying multiple types
-	UserIDType UserIDType
-
-	// Custom key extractor function (used when Strategy is "custom")
-	// This allows for complex rate limiting scenarios
-	KeyExtractor func(*http.Request) (string, error)
-
-	// Response to send when rate limit is exceeded
-	// If nil, a default 429 Too Many Requests response is sent
-	ExceededHandler http.Handler
-}
-
 // RateLimiter defines the interface for rate limiting algorithms
 type RateLimiter interface {
 	// Allow checks if a request is allowed based on the key and rate limit config
@@ -188,10 +140,7 @@ func (u *UberRateLimiter) Allow(key string, limit int, window time.Duration) (bo
 	}
 
 	// Calculate remaining based on counter
-	remaining := limit - count
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(limit-count, 0)
 
 	return true, remaining, effectiveWindow
 }
@@ -225,6 +174,63 @@ func extractIP(r *http.Request) string {
 	// Fall back to RemoteAddr
 	return r.RemoteAddr
 }
+
+// RateLimitConfig defines configuration for rate limiting
+// This is the non-generic version for backward compatibility
+type RateLimitConfig struct {
+	// Unique identifier for this rate limit bucket
+	// If multiple routes/subrouters share the same BucketName, they share the same rate limit
+	BucketName string
+
+	// Maximum number of requests allowed in the time window
+	Limit int
+
+	// Time window for the rate limit (e.g., 1 minute, 1 hour)
+	Window time.Duration
+
+	// Strategy for identifying clients (IP, User, Custom)
+	// - "ip": Use client IP address
+	// - "user": Use authenticated user ID
+	// - "custom": Use a custom key extractor
+	Strategy RateLimitStrategy
+
+	// Type of user ID to use for rate limiting (only used when Strategy is StrategyUser)
+	// This allows for efficient user ID extraction without trying multiple types
+	UserIDType UserIDType
+
+	// Custom key extractor function (used when Strategy is "custom")
+	// This allows for complex rate limiting scenarios
+	KeyExtractor func(*http.Request) (string, error)
+
+	// Response to send when rate limit is exceeded
+	// If nil, a default 429 Too Many Requests response is sent
+	ExceededHandler http.Handler
+}
+
+// UserIDType represents the type of user ID used for rate limiting
+type UserIDType int
+
+const (
+	UserIDTypeUnknown UserIDType = iota
+	// UserIDTypeString indicates that the user ID is a string
+	UserIDTypeString
+	// UserIDTypeInt indicates that the user ID is an int
+	UserIDTypeInt
+	// UserIDTypeInt64 indicates that the user ID is an int64
+	UserIDTypeInt64
+	// UserIDTypeUint64 indicates that the user ID is a uint64
+	UserIDTypeUint64
+	// UserIDTypeUint indicates that the user ID is a uint
+	UserIDTypeUint
+	// UserIDTypeInt32 indicates that the user ID is an int32
+	UserIDTypeInt32
+	// UserIDTypeUint32 indicates that the user ID is a uint32
+	UserIDTypeUint32
+	// UserIDTypeFloat64 indicates that the user ID is a float64
+	UserIDTypeFloat64
+	// UserIDTypeBool indicates that the user ID is a bool
+	UserIDTypeBool
+)
 
 // extractUserWithType extracts the user ID from the request context using the specified user ID type
 // This function uses type information to efficiently retrieve the user ID without trying multiple types
@@ -337,6 +343,7 @@ func extractUser(r *http.Request, config *RateLimitConfig) string {
 }
 
 // RateLimit creates a middleware that enforces rate limits
+// This is the non-generic version for backward compatibility
 func RateLimit(config *RateLimitConfig, limiter RateLimiter, logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -418,4 +425,226 @@ func RateLimit(config *RateLimitConfig, limiter RateLimiter, logger *zap.Logger)
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// RateLimitConfigGeneric defines configuration for rate limiting with generic type parameters
+// The type parameter T represents the user ID type, which can be any comparable type.
+// The type parameter U represents the user type, which can be any type.
+type RateLimitConfigGeneric[T comparable, U any] struct {
+	// Unique identifier for this rate limit bucket
+	// If multiple routes/subrouters share the same BucketName, they share the same rate limit
+	BucketName string
+
+	// Maximum number of requests allowed in the time window
+	Limit int
+
+	// Time window for the rate limit (e.g., 1 minute, 1 hour)
+	Window time.Duration
+
+	// Strategy for identifying clients (IP, User, Custom)
+	// - "ip": Use client IP address
+	// - "user": Use authenticated user ID
+	// - "custom": Use a custom key extractor
+	Strategy RateLimitStrategy
+
+	// Function to extract user ID from user object (only used when Strategy is StrategyUser)
+	// This allows for efficient user ID extraction without trying multiple types
+	UserIDFromUser func(U) T
+
+	// Function to convert user ID to string (only used when Strategy is StrategyUser)
+	// This allows for efficient user ID conversion without type assertions
+	UserIDToString func(T) string
+
+	// Custom key extractor function (used when Strategy is "custom")
+	// This allows for complex rate limiting scenarios
+	KeyExtractor func(*http.Request) (string, error)
+
+	// Response to send when rate limit is exceeded
+	// If nil, a default 429 Too Many Requests response is sent
+	ExceededHandler http.Handler
+}
+
+// extractUserGeneric extracts the user ID from the request context using generic type parameters
+// This function uses type information to efficiently retrieve the user ID without trying multiple types
+func extractUserGeneric[T comparable, U any](r *http.Request, config *RateLimitConfigGeneric[T, U]) string {
+	// Get the user from the context
+	user := GetUser[U](r)
+	if user == nil {
+		// If no user is found, try to get the user ID directly
+		userID, ok := GetUserID[T](r)
+		if !ok {
+			return ""
+		}
+
+		// Convert the user ID to string using the provided function
+		if config.UserIDToString != nil {
+			return config.UserIDToString(userID)
+		}
+
+		// Fall back to default conversion based on type
+		switch any(userID).(type) {
+		case string:
+			return any(userID).(string)
+		case int:
+			return strconv.Itoa(any(userID).(int))
+		case int64:
+			return strconv.FormatInt(any(userID).(int64), 10)
+		case float64:
+			return strconv.FormatFloat(any(userID).(float64), 'f', -1, 64)
+		case bool:
+			return strconv.FormatBool(any(userID).(bool))
+		default:
+			// For other types, use the String() method if available
+			if stringer, ok := any(userID).(interface{ String() string }); ok {
+				return stringer.String()
+			}
+			return fmt.Sprint(userID)
+		}
+	}
+
+	// Extract the user ID from the user object using the provided function
+	if config.UserIDFromUser != nil {
+		userID := config.UserIDFromUser(*user)
+
+		// Convert the user ID to string using the provided function
+		if config.UserIDToString != nil {
+			return config.UserIDToString(userID)
+		}
+
+		// Fall back to default conversion based on type
+		switch any(userID).(type) {
+		case string:
+			return any(userID).(string)
+		case int:
+			return strconv.Itoa(any(userID).(int))
+		case int64:
+			return strconv.FormatInt(any(userID).(int64), 10)
+		case float64:
+			return strconv.FormatFloat(any(userID).(float64), 'f', -1, 64)
+		case bool:
+			return strconv.FormatBool(any(userID).(bool))
+		default:
+			// For other types, use the String() method if available
+			if stringer, ok := any(userID).(interface{ String() string }); ok {
+				return stringer.String()
+			}
+			return fmt.Sprint(userID)
+		}
+	}
+
+	// If no user ID extraction function is provided, return an empty string
+	return ""
+}
+
+// RateLimitGeneric creates a middleware that enforces rate limits using generic type parameters
+// The type parameter T represents the user ID type, which can be any comparable type.
+// The type parameter U represents the user type, which can be any type.
+func RateLimitGeneric[T comparable, U any](config *RateLimitConfigGeneric[T, U], limiter RateLimiter, logger *zap.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Skip rate limiting if config is nil
+			if config == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Extract key based on strategy
+			var key string
+			var err error
+
+			switch config.Strategy {
+			case StrategyIP:
+				key = extractIP(r)
+			case StrategyUser:
+				key = extractUserGeneric(r, config)
+				// If no user is found and strategy is user, fall back to IP
+				if key == "" {
+					key = extractIP(r)
+				}
+			case StrategyCustom:
+				if config.KeyExtractor != nil {
+					key, err = config.KeyExtractor(r)
+					if err != nil {
+						logger.Error("Failed to extract rate limit key",
+							zap.Error(err),
+							zap.String("method", r.Method),
+							zap.String("path", r.URL.Path),
+						)
+						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+						return
+					}
+				} else {
+					// If no key extractor is provided, fall back to IP
+					key = extractIP(r)
+				}
+			default:
+				key = extractIP(r)
+			}
+
+			// Combine bucket name and key to create a unique identifier
+			bucketKey := config.BucketName + ":" + key
+
+			// Check rate limit
+			allowed, remaining, reset := limiter.Allow(bucketKey, config.Limit, config.Window)
+
+			// Set rate limit headers
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(config.Limit))
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(reset).Unix(), 10))
+
+			// If rate limit exceeded
+			if !allowed {
+				w.Header().Set("Retry-After", strconv.FormatInt(int64(reset.Seconds()), 10))
+
+				// Use custom handler if provided, otherwise return 429
+				if config.ExceededHandler != nil {
+					config.ExceededHandler.ServeHTTP(w, r)
+				} else {
+					http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				}
+
+				logger.Warn("Rate limit exceeded",
+					zap.String("method", r.Method),
+					zap.String("path", r.URL.Path),
+					zap.String("key", key),
+					zap.Int("limit", config.Limit),
+					zap.Int("remaining", remaining),
+				)
+
+				return
+			}
+
+			// Headers are already set above
+
+			// Call the next handler
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// CreateRateLimitMiddlewareGeneric is a helper function to create a rate limit middleware with generic type parameters
+// This function is useful when you want to create a rate limit middleware with a specific user ID type and user type
+// The type parameter T represents the user ID type, which can be any comparable type.
+// The type parameter U represents the user type, which can be any type.
+func CreateRateLimitMiddlewareGeneric[T comparable, U any](
+	bucketName string,
+	limit int,
+	window time.Duration,
+	strategy RateLimitStrategy,
+	userIDFromUser func(U) T,
+	userIDToString func(T) string,
+	logger *zap.Logger,
+) func(http.Handler) http.Handler {
+	config := &RateLimitConfigGeneric[T, U]{
+		BucketName:     bucketName,
+		Limit:          limit,
+		Window:         window,
+		Strategy:       strategy,
+		UserIDFromUser: userIDFromUser,
+		UserIDToString: userIDToString,
+	}
+
+	limiter := NewUberRateLimiter()
+
+	return RateLimitGeneric(config, limiter, logger)
 }
