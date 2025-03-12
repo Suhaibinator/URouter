@@ -103,17 +103,14 @@ func TestLoggingMiddleware(t *testing.T) {
 	// Create a router
 	r := NewRouter(RouterConfig{})
 
-	// Create a handler
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Create a handler and wrap it with the LoggingMiddleware
+	wrappedHandler := LoggingMiddleware(r.logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("Hello, World!"))
 		if err != nil {
 			t.Fatalf("Failed to write response: %v", err)
 		}
-	})
-
-	// Wrap the handler with the LoggingMiddleware
-	wrappedHandler := LoggingMiddleware(r.logger)(handler)
+	}))
 
 	// Create a request
 	req, _ := http.NewRequest("GET", "/test", nil)
