@@ -148,8 +148,33 @@ func main() {
 		},
 	}
 
-	// Create a router with *User as the user ID type (pointers are comparable)
-	r := router.NewRouter[*User](routerConfig)
+	// Define the auth function that takes a token and returns a User and a boolean
+	authFunction := func(token string) (User, bool) {
+		// Look up the username for this token
+		username, exists := tokens[token]
+		if !exists {
+			return User{}, false
+		}
+
+		// Look up the user
+		user, exists := users[username]
+		if !exists {
+			return User{}, false
+		}
+
+		return user, true
+	}
+
+	// Define the function to get the user ID from a User
+	userIdFromUserFunction := func(user User) *User {
+		// In this example, we're using a pointer to the user as the ID
+		// In a real application, you might use a string or int ID
+		userCopy := user // Create a copy to avoid returning a pointer to a loop variable
+		return &userCopy
+	}
+
+	// Create a router with *User as the user ID type and User as the user type
+	r := router.NewRouter[*User, User](routerConfig, authFunction, userIdFromUserFunction)
 
 	// Start the server
 	fmt.Println("Authentication Levels Example Server listening on :8080")

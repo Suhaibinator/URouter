@@ -20,8 +20,8 @@ func TestSubRouterIntegration(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with sub-routers and string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with sub-routers and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:            logger,
 		GlobalTimeout:     1 * time.Second,
 		GlobalMaxBodySize: 1024, // 1 KB
@@ -55,7 +55,15 @@ func TestSubRouterIntegration(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Test the first sub-router
 	req, _ := http.NewRequest("GET", "/api/v1/users", nil)
@@ -95,8 +103,8 @@ func TestPathParameters(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with a route that has path parameters and string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with a route that has path parameters and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
 		SubRouters: []SubRouterConfig{
 			{
@@ -124,7 +132,15 @@ func TestPathParameters(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Test the first route
 	req, _ := http.NewRequest("GET", "/api/users/123", nil)
@@ -164,8 +180,8 @@ func TestTimeoutOverrides(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with timeout overrides and string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with timeout overrides and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 100 * time.Millisecond,
 		SubRouters: []SubRouterConfig{
@@ -203,7 +219,15 @@ func TestTimeoutOverrides(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Test the fast route
 	req, _ := http.NewRequest("GET", "/api/v1/fast", nil)
@@ -241,8 +265,8 @@ func TestMaxBodySizeOverrides(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with max body size overrides and string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with max body size overrides and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:            logger,
 		GlobalMaxBodySize: 10, // 10 bytes
 		SubRouters: []SubRouterConfig{
@@ -280,7 +304,15 @@ func TestMaxBodySizeOverrides(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Test the small route with a small body
 	req, _ := http.NewRequest("POST", "/api/v1/small", strings.NewReader("small"))
@@ -328,10 +360,18 @@ func TestGenericRouteIntegration(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a generic route
 	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
@@ -381,8 +421,8 @@ func TestMiddlewareIntegration(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with middleware and string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with middleware and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
 		Middlewares: []Middleware{
 			middleware.CORS([]string{"*"}, []string{"GET", "POST"}, []string{"Content-Type"}),
@@ -420,7 +460,15 @@ func TestMiddlewareIntegration(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a request
 	req, _ := http.NewRequest("GET", "/api/test", nil)
@@ -458,10 +506,18 @@ func TestGracefulShutdown(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a route that sleeps
 	r.RegisterRoute(RouteConfigBase{
@@ -533,10 +589,18 @@ func TestEdgeCases(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a route with a root path
 	r.RegisterRoute(RouteConfigBase{

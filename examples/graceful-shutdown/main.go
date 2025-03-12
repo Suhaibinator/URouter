@@ -76,8 +76,23 @@ func main() {
 		GlobalMaxBodySize: 1 << 20, // 1 MB
 	}
 
-	// Create a router with string as the user ID type
-	r := router.NewRouter[string](routerConfig)
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := router.NewRouter[string, string](routerConfig, authFunction, userIdFromUserFunction)
 
 	// Register routes
 	r.RegisterRoute(router.RouteConfigBase{

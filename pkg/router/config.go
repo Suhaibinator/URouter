@@ -47,16 +47,17 @@ type PrometheusConfig struct {
 // RouterConfig defines the global configuration for the router.
 // It includes settings for logging, timeouts, metrics, and middleware.
 type RouterConfig struct {
-	Logger            *zap.Logger                 // Logger for all router operations
-	GlobalTimeout     time.Duration               // Default response timeout for all routes
-	GlobalMaxBodySize int64                       // Default maximum request body size in bytes
-	GlobalRateLimit   *middleware.RateLimitConfig // Default rate limit for all routes
-	IPConfig          *middleware.IPConfig        // Configuration for client IP extraction
-	EnableMetrics     bool                        // Enable metrics collection
-	EnableTracing     bool                        // Enable distributed tracing
-	PrometheusConfig  *PrometheusConfig           // Prometheus metrics configuration (optional)
-	SubRouters        []SubRouterConfig           // Sub-routers with their own configurations
-	Middlewares       []common.Middleware         // Global middlewares applied to all routes
+	Logger             *zap.Logger                 // Logger for all router operations
+	GlobalTimeout      time.Duration               // Default response timeout for all routes
+	GlobalMaxBodySize  int64                       // Default maximum request body size in bytes
+	GlobalRateLimit    *middleware.RateLimitConfig // Default rate limit for all routes
+	IPConfig           *middleware.IPConfig        // Configuration for client IP extraction
+	EnableMetrics      bool                        // Enable metrics collection
+	EnableTracing      bool                        // Enable distributed tracing
+	PrometheusConfig   *PrometheusConfig           // Prometheus metrics configuration (optional)
+	SubRouters         []SubRouterConfig           // Sub-routers with their own configurations
+	Middlewares        []common.Middleware         // Global middlewares applied to all routes
+	AddUserObjectToCtx bool                        // Add user object to context
 }
 
 // SubRouterConfig defines configuration for a group of routes with a common path prefix.

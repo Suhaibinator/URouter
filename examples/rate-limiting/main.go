@@ -239,8 +239,31 @@ func main() {
 		},
 	}
 
-	// Create a router with User as the user ID type
-	r := router.NewRouter[User](routerConfig)
+	// Define the auth function that takes a token and returns a User and a boolean
+	authFunction := func(token string) (User, bool) {
+		// Validate the token
+		userID, ok := tokens[token]
+		if !ok {
+			return User{}, false
+		}
+
+		// Get the user from the database
+		user, ok := users[userID]
+		if !ok {
+			return User{}, false
+		}
+
+		return user, true
+	}
+
+	// Define the function to get the user ID from a User
+	userIdFromUserFunction := func(user User) User {
+		// In this example, we're using the User itself as the ID
+		return user
+	}
+
+	// Create a router with User as both the user ID and user type
+	r := router.NewRouter[User, User](routerConfig, authFunction, userIdFromUserFunction)
 
 	// Start the server
 	fmt.Println("Server listening on :8080")

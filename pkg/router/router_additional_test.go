@@ -13,10 +13,18 @@ import (
 
 // TestNewRouterWithNilLogger tests creating a router with a nil logger
 func TestNewRouterWithNilLogger(t *testing.T) {
-	// Create a router with a nil logger and string as the user ID type
-	r := NewRouter[string](RouterConfig{
+	// Create a router with a nil logger and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: nil,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Check that the router was created
 	if r == nil {
@@ -42,8 +50,16 @@ func TestRegisterGenericRoute(t *testing.T) {
 		Age      int    `json:"age"`
 	}
 
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{})
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a generic route
 	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
@@ -74,8 +90,16 @@ func TestRegisterGenericRoute(t *testing.T) {
 
 // TestHandleErrorWithHTTPError tests handling an error with an HTTPError
 func TestHandleErrorWithHTTPError(t *testing.T) {
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{})
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create an HTTPError
 	httpErr := NewHTTPError(http.StatusNotFound, "Not Found")
@@ -100,8 +124,16 @@ func TestHandleErrorWithHTTPError(t *testing.T) {
 
 // TestLoggingMiddleware tests the LoggingMiddleware function
 func TestLoggingMiddleware(t *testing.T) {
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{})
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a handler and wrap it with the LoggingMiddleware
 	wrappedHandler := LoggingMiddleware(r.logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,8 +174,16 @@ func TestRegisterGenericRouteWithError(t *testing.T) {
 		Age      int    `json:"age"`
 	}
 
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{})
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a generic route that returns an error
 	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
@@ -181,8 +221,16 @@ func TestRegisterGenericRouteWithEncodeError(t *testing.T) {
 		Age  int    `json:"age"`
 	}
 
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{})
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a generic route that returns an unmarshalable response
 	RegisterGenericRoute[TestRequest, UnmarshalableResponse, string](r, RouteConfig[TestRequest, UnmarshalableResponse]{
@@ -263,8 +311,16 @@ func TestResponseWriter(t *testing.T) {
 
 // TestShutdownWithCancel tests the Shutdown method with a canceled context
 func TestShutdownWithCancel(t *testing.T) {
-	// Create a router with string as the user ID type
-	r := NewRouter[string](RouterConfig{})
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a context that is already canceled
 	ctx, cancel := context.WithCancel(context.Background())
