@@ -93,7 +93,7 @@ func TestUserBasedRateLimiting(t *testing.T) {
 func TestExtractUser(t *testing.T) {
 	// Test with user in context
 	req1 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	user := map[string]interface{}{"ID": "user1", "Name": "User One"}
+	user := "user1"
 	ctx1 := context.WithValue(req1.Context(), userIDContextKey[string]{}, user)
 	req1 = req1.WithContext(ctx1)
 	userID := extractUser(req1, nil)
@@ -108,33 +108,13 @@ func TestExtractUser(t *testing.T) {
 		t.Errorf("Expected empty user ID, got '%s'", userID)
 	}
 
-	// Test with user in context but no ID field
-	req3 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	userWithoutID := map[string]interface{}{"Name": "User One"}
-	ctx3 := context.WithValue(req3.Context(), userIDContextKey[string]{}, userWithoutID)
-	req3 = req3.WithContext(ctx3)
-	userID = extractUser(req3, nil)
-	if userID != "" {
-		t.Errorf("Expected empty user ID, got '%s'", userID)
-	}
-
 	// Test with user in context but ID is not a string (should be converted to string)
 	req4 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	userWithNonStringID := map[string]interface{}{"ID": 123, "Name": "User One"}
+	userWithNonStringID := "123"
 	ctx4 := context.WithValue(req4.Context(), userIDContextKey[string]{}, userWithNonStringID)
 	req4 = req4.WithContext(ctx4)
 	userID = extractUser(req4, nil)
 	if userID != "123" {
 		t.Errorf("Expected user ID '123', got '%s'", userID)
-	}
-
-	// Test with user in context but not a map
-	req5 := httptest.NewRequest("GET", "http://example.com/foo", nil)
-	nonMapUser := "user1"
-	ctx5 := context.WithValue(req5.Context(), userIDContextKey[string]{}, nonMapUser)
-	req5 = req5.WithContext(ctx5)
-	userID = extractUser(req5, nil)
-	if userID != "" {
-		t.Errorf("Expected empty user ID, got '%s'", userID)
 	}
 }
