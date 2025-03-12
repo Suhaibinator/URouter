@@ -45,11 +45,11 @@ func DefaultIPConfig() *IPConfig {
 	}
 }
 
-// contextKey is a type for context keys
-type contextKey string
+// clientIPKey is a struct type used for context keys to avoid string conflicts
+type clientIPKey struct{}
 
 // ClientIPKey is the key used to store the client IP in the request context
-const ClientIPKey contextKey = "client_ip"
+var ClientIPKey = clientIPKey{}
 
 // ClientIP extracts the client IP from the request context
 func ClientIP(r *http.Request) string {
