@@ -184,8 +184,8 @@ func main() {
 		},
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Create a router with *User as the user ID type (pointers are comparable)
+	r := router.NewRouter[*User](routerConfig)
 
 	// Start the server
 	fmt.Println("User Authentication Example Server listening on :8080")

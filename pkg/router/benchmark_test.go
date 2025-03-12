@@ -16,8 +16,8 @@ func BenchmarkRouterSimple(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a single route
-	r := NewRouter(RouterConfig{
+	// Create a router with a single route and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
@@ -53,8 +53,8 @@ func BenchmarkRouterWithParams(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a route that has path parameters
-	r := NewRouter(RouterConfig{
+	// Create a router with a route that has path parameters and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
@@ -102,8 +102,8 @@ func BenchmarkRouterWithMiddleware(b *testing.B) {
 		}
 	}
 
-	// Create a router with middleware
-	r := NewRouter(RouterConfig{
+	// Create a router with middleware and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 		Middlewares: []Middleware{
 			addHeaderMiddleware("X-Global", "true"),
@@ -145,8 +145,8 @@ func BenchmarkRouterWithTimeout(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a timeout
-	r := NewRouter(RouterConfig{
+	// Create a router with a timeout and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 1 * time.Second,
 	})
@@ -183,8 +183,8 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with many routes
-	r := NewRouter(RouterConfig{
+	// Create a router with many routes and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
@@ -236,8 +236,8 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 

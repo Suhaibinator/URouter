@@ -14,8 +14,8 @@ func TestAuthOptionalMiddleware(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := &Router{
+	// Create a router with string as the user ID type
+	r := &Router[string]{
 		logger: logger,
 	}
 

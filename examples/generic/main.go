@@ -261,46 +261,46 @@ func main() {
 		GlobalMaxBodySize: 1 << 20, // 1 MB
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Create a router with string as the user ID type
+	r := router.NewRouter[string](routerConfig)
 
 	// Register generic routes
-	router.RegisterGenericRoute(r, router.RouteConfig[CreateUserRequest, CreateUserResponse]{
+	router.RegisterGenericRoute[CreateUserRequest, CreateUserResponse, string](r, router.RouteConfig[CreateUserRequest, CreateUserResponse]{
 		Path:    "/users",
 		Methods: []string{"POST"},
 		Codec:   codec.NewJSONCodec[CreateUserRequest, CreateUserResponse](),
 		Handler: CreateUserHandler,
 	})
 
-	router.RegisterGenericRoute(r, router.RouteConfig[GetUserRequest, GetUserResponse]{
+	router.RegisterGenericRoute[GetUserRequest, GetUserResponse, string](r, router.RouteConfig[GetUserRequest, GetUserResponse]{
 		Path:    "/users/:id",
 		Methods: []string{"GET"},
 		Codec:   codec.NewJSONCodec[GetUserRequest, GetUserResponse](),
 		Handler: GetUserHandler,
 	})
 
-	router.RegisterGenericRoute(r, router.RouteConfig[UpdateUserRequest, UpdateUserResponse]{
+	router.RegisterGenericRoute[UpdateUserRequest, UpdateUserResponse, string](r, router.RouteConfig[UpdateUserRequest, UpdateUserResponse]{
 		Path:    "/users/:id",
 		Methods: []string{"PUT"},
 		Codec:   codec.NewJSONCodec[UpdateUserRequest, UpdateUserResponse](),
 		Handler: UpdateUserHandler,
 	})
 
-	router.RegisterGenericRoute(r, router.RouteConfig[DeleteUserRequest, DeleteUserResponse]{
+	router.RegisterGenericRoute[DeleteUserRequest, DeleteUserResponse, string](r, router.RouteConfig[DeleteUserRequest, DeleteUserResponse]{
 		Path:    "/users/:id",
 		Methods: []string{"DELETE"},
 		Codec:   codec.NewJSONCodec[DeleteUserRequest, DeleteUserResponse](),
 		Handler: DeleteUserHandler,
 	})
 
-	router.RegisterGenericRoute(r, router.RouteConfig[ListUsersRequest, ListUsersResponse]{
+	router.RegisterGenericRoute[ListUsersRequest, ListUsersResponse, string](r, router.RouteConfig[ListUsersRequest, ListUsersResponse]{
 		Path:    "/users",
 		Methods: []string{"GET"},
 		Codec:   codec.NewJSONCodec[ListUsersRequest, ListUsersResponse](),
 		Handler: ListUsersHandler,
 	})
 
-	router.RegisterGenericRoute(r, router.RouteConfig[EmptyRequest, ErrorResponse]{
+	router.RegisterGenericRoute[EmptyRequest, ErrorResponse, string](r, router.RouteConfig[EmptyRequest, ErrorResponse]{
 		Path:    "/error",
 		Methods: []string{"GET"},
 		Codec:   codec.NewJSONCodec[EmptyRequest, ErrorResponse](),

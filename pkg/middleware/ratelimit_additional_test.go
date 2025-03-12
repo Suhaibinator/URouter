@@ -80,9 +80,15 @@ func TestExtractUserAdditional(t *testing.T) {
 		t.Errorf("Expected user ID 'user123', got '%s'", userID)
 	}
 
+	// Define a User type for testing
+	type User struct {
+		ID   any
+		Name string
+	}
+
 	// Test with user in context with common keys
 	req = httptest.NewRequest("GET", "/test", nil)
-	ctx = context.WithValue(req.Context(), "user", map[string]any{"ID": "user456"})
+	ctx = context.WithValue(req.Context(), userIDContextKey[string]{}, "user456")
 	req = req.WithContext(ctx)
 	userID = extractUser(req, nil)
 	if userID != "user456" {
@@ -105,9 +111,41 @@ func TestExtractUserAdditional(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			req = httptest.NewRequest("GET", "/test", nil)
-			ctx = context.WithValue(req.Context(), "user", map[string]any{"ID": tc.id})
+			var config *RateLimitConfig
+			switch tc.name {
+			case "string":
+				ctx = context.WithValue(req.Context(), userIDContextKey[string]{}, tc.id.(string))
+				config = &RateLimitConfig{
+					Strategy:   StrategyUser,
+					UserIDType: UserIDTypeString,
+				}
+			case "int":
+				ctx = context.WithValue(req.Context(), userIDContextKey[int]{}, tc.id.(int))
+				config = &RateLimitConfig{
+					Strategy:   StrategyUser,
+					UserIDType: UserIDTypeInt,
+				}
+			case "int64":
+				ctx = context.WithValue(req.Context(), userIDContextKey[int64]{}, tc.id.(int64))
+				config = &RateLimitConfig{
+					Strategy:   StrategyUser,
+					UserIDType: UserIDTypeInt64,
+				}
+			case "float64":
+				ctx = context.WithValue(req.Context(), userIDContextKey[float64]{}, tc.id.(float64))
+				config = &RateLimitConfig{
+					Strategy:   StrategyUser,
+					UserIDType: UserIDTypeFloat64,
+				}
+			case "bool":
+				ctx = context.WithValue(req.Context(), userIDContextKey[bool]{}, tc.id.(bool))
+				config = &RateLimitConfig{
+					Strategy:   StrategyUser,
+					UserIDType: UserIDTypeBool,
+				}
+			}
 			req = req.WithContext(ctx)
-			userID = extractUser(req, nil)
+			userID = extractUser(req, config)
 			if userID != tc.expected {
 				t.Errorf("Expected user ID '%s', got '%s'", tc.expected, userID)
 			}
@@ -116,7 +154,7 @@ func TestExtractUserAdditional(t *testing.T) {
 
 	// Test with user in context but no ID field
 	req = httptest.NewRequest("GET", "/test", nil)
-	ctx = context.WithValue(req.Context(), "user", map[string]any{"Name": "Test User"})
+	ctx = context.WithValue(req.Context(), User{}, struct{ Name string }{"Test User"})
 	req = req.WithContext(ctx)
 	userID = extractUser(req, nil)
 	if userID != "" {
@@ -125,20 +163,11 @@ func TestExtractUserAdditional(t *testing.T) {
 
 	// Test with string user in context (should return empty string)
 	req = httptest.NewRequest("GET", "/test", nil)
-	ctx = context.WithValue(req.Context(), "user", "user123")
+	ctx = context.WithValue(req.Context(), User{}, "user123")
 	req = req.WithContext(ctx)
 	userID = extractUser(req, nil)
 	if userID != "" {
 		t.Errorf("Expected empty user ID, got '%s'", userID)
-	}
-
-	// Test with user_context key
-	req = httptest.NewRequest("GET", "/test", nil)
-	ctx = context.WithValue(req.Context(), "user_context", map[string]any{"ID": "user789"})
-	req = req.WithContext(ctx)
-	userID = extractUser(req, nil)
-	if userID != "user789" {
-		t.Errorf("Expected user ID 'user789', got '%s'", userID)
 	}
 
 	// Test with struct key

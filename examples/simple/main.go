@@ -73,11 +73,11 @@ func main() {
 		},
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Create a router with string as the user ID type
+	r := router.NewRouter[string](routerConfig)
 
 	// Register a generic JSON route
-	router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
+	router.RegisterGenericRoute[CreateUserReq, CreateUserResp, string](r, router.RouteConfig[CreateUserReq, CreateUserResp]{
 		Path:      "/api/users",
 		Methods:   []string{"POST"},
 		AuthLevel: router.AuthRequired,

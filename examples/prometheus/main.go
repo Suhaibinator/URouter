@@ -63,8 +63,8 @@ func main() {
 		},
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Create a router with string as the user ID type
+	r := router.NewRouter[string](routerConfig)
 
 	// Create a metrics handler
 	metricsHandler := middleware.PrometheusHandler(promRegistry)

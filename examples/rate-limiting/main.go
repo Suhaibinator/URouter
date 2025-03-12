@@ -239,8 +239,8 @@ func main() {
 		},
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Create a router with User as the user ID type
+	r := router.NewRouter[User](routerConfig)
 
 	// Start the server
 	fmt.Println("Server listening on :8080")

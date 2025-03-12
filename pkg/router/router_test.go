@@ -21,8 +21,8 @@ func TestRouteMatching(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 		SubRouters: []SubRouterConfig{
 			{
@@ -76,8 +76,8 @@ func TestSubRouterOverrides(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router with a global timeout of 1 second
-	r := NewRouter(RouterConfig{
+	// Create a router with a global timeout of 1 second and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 1 * time.Second,
 		SubRouters: []SubRouterConfig{
@@ -151,8 +151,8 @@ func TestBodySizeLimits(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a global max body size of 10 bytes
-	r := NewRouter(RouterConfig{
+	// Create a router with a global max body size of 10 bytes and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:            logger,
 		GlobalMaxBodySize: 10,
 		SubRouters: []SubRouterConfig{
@@ -247,13 +247,13 @@ func TestJSONCodec(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
 	// Register a generic JSON route
-	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
 		Path:    "/greet",
 		Methods: []string{"POST"},
 		Codec:   codec.NewJSONCodec[TestRequest, TestResponse](),
@@ -307,8 +307,8 @@ func TestMiddlewareChaining(t *testing.T) {
 		}
 	}
 
-	// Create a router with global middleware
-	r := NewRouter(RouterConfig{
+	// Create a router with global middleware and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 		Middlewares: []common.Middleware{
 			addHeaderMiddleware("Global", "true"),
@@ -372,8 +372,8 @@ func TestShutdown(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 

@@ -20,8 +20,8 @@ func TestSubRouterIntegration(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with sub-routers
-	r := NewRouter(RouterConfig{
+	// Create a router with sub-routers and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:            logger,
 		GlobalTimeout:     1 * time.Second,
 		GlobalMaxBodySize: 1024, // 1 KB
@@ -95,8 +95,8 @@ func TestPathParameters(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with a route that has path parameters
-	r := NewRouter(RouterConfig{
+	// Create a router with a route that has path parameters and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 		SubRouters: []SubRouterConfig{
 			{
@@ -164,8 +164,8 @@ func TestTimeoutOverrides(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with timeout overrides
-	r := NewRouter(RouterConfig{
+	// Create a router with timeout overrides and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 100 * time.Millisecond,
 		SubRouters: []SubRouterConfig{
@@ -241,8 +241,8 @@ func TestMaxBodySizeOverrides(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with max body size overrides
-	r := NewRouter(RouterConfig{
+	// Create a router with max body size overrides and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:            logger,
 		GlobalMaxBodySize: 10, // 10 bytes
 		SubRouters: []SubRouterConfig{
@@ -328,13 +328,13 @@ func TestGenericRouteIntegration(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
 	// Register a generic route
-	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
 		Path:    "/greet",
 		Methods: []string{"POST"},
 		Codec:   codec.NewJSONCodec[TestRequest, TestResponse](),
@@ -381,8 +381,8 @@ func TestMiddlewareIntegration(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router with middleware
-	r := NewRouter(RouterConfig{
+	// Create a router with middleware and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 		Middlewares: []Middleware{
 			middleware.CORS([]string{"*"}, []string{"GET", "POST"}, []string{"Content-Type"}),
@@ -458,8 +458,8 @@ func TestGracefulShutdown(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
@@ -533,8 +533,8 @@ func TestEdgeCases(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 

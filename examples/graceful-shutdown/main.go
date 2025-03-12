@@ -76,8 +76,8 @@ func main() {
 		GlobalMaxBodySize: 1 << 20, // 1 MB
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Create a router with string as the user ID type
+	r := router.NewRouter[string](routerConfig)
 
 	// Register routes
 	r.RegisterRoute(router.RouteConfigBase{

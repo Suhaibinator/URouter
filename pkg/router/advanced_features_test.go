@@ -21,8 +21,8 @@ func TestPrometheusConfig(t *testing.T) {
 	// Create a registry
 	registry := prometheus.NewRegistry()
 
-	// Create a router with Prometheus config
-	r := NewRouter(RouterConfig{
+	// Create a router with Prometheus config and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		PrometheusConfig: &PrometheusConfig{
 			Registry:         registry,
 			Namespace:        "test",
@@ -55,8 +55,8 @@ func TestGenericRouteDecodeError(t *testing.T) {
 	core, logs := observer.New(zap.ErrorLevel)
 	logger := zap.New(core)
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
@@ -69,7 +69,7 @@ func TestGenericRouteDecodeError(t *testing.T) {
 	}
 
 	// Register a generic route
-	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
 		Path:      "/greet",
 		Methods:   []string{"POST"},
 		AuthLevel: NoAuth, // No authentication required
@@ -119,8 +119,8 @@ func TestSlowRequestLogging(t *testing.T) {
 	core, logs := observer.New(zap.WarnLevel)
 	logger := zap.New(core)
 
-	// Create a router with metrics enabled
-	r := NewRouter(RouterConfig{
+	// Create a router with metrics enabled and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	})
@@ -180,8 +180,8 @@ func TestErrorStatusLogging(t *testing.T) {
 	core, logs := observer.New(zap.ErrorLevel)
 	logger := zap.New(core)
 
-	// Create a router with metrics enabled
-	r := NewRouter(RouterConfig{
+	// Create a router with metrics enabled and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	})
@@ -238,8 +238,8 @@ func TestErrorStatusLogging(t *testing.T) {
 	core, logs = observer.New(zap.WarnLevel)
 	logger = zap.New(core)
 
-	// Create a new router with the new logger
-	r = NewRouter(RouterConfig{
+	// Create a new router with the new logger and string as the user ID type
+	r = NewRouter[string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	})
@@ -290,8 +290,8 @@ func TestMetricsResponseWriterFlush(t *testing.T) {
 		flushed:          false,
 	}
 
-	// Create a metrics response writer
-	mrw := &metricsResponseWriter{
+	// Create a metrics response writer with string as the user ID type
+	mrw := &metricsResponseWriter[string]{
 		ResponseWriter: rr,
 		statusCode:     http.StatusOK,
 	}
@@ -323,8 +323,8 @@ func TestAuthMiddleware(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 

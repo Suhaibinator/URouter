@@ -15,8 +15,8 @@ func TestMetrics(t *testing.T) {
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core)
 
-	// Create a router with metrics enabled
-	r := NewRouter(RouterConfig{
+	// Create a router with metrics enabled and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
 	})
@@ -91,8 +91,8 @@ func TestTracing(t *testing.T) {
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core)
 
-	// Create a router with tracing enabled
-	r := NewRouter(RouterConfig{
+	// Create a router with tracing enabled and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger:        logger,
 		EnableTracing: true,
 	})
@@ -174,8 +174,8 @@ func TestMetricsResponseWriter(t *testing.T) {
 	// Create a test response recorder
 	rr := httptest.NewRecorder()
 
-	// Create a metrics response writer
-	mrw := &metricsResponseWriter{
+	// Create a metrics response writer with string as the user ID type
+	mrw := &metricsResponseWriter[string]{
 		ResponseWriter: rr,
 		statusCode:     http.StatusOK,
 	}

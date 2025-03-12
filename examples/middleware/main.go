@@ -196,8 +196,8 @@ func main() {
 		},
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Create a router with string as the user ID type
+	r := router.NewRouter[string](routerConfig)
 
 	// Register a route with route-specific middleware
 	r.RegisterRoute(router.RouteConfigBase{

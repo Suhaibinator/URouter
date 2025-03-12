@@ -15,8 +15,8 @@ func TestErrorHandling(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 
@@ -114,8 +114,8 @@ func TestHandleError(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: logger,
 	})
 

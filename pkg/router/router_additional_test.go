@@ -13,8 +13,8 @@ import (
 
 // TestNewRouterWithNilLogger tests creating a router with a nil logger
 func TestNewRouterWithNilLogger(t *testing.T) {
-	// Create a router with a nil logger
-	r := NewRouter(RouterConfig{
+	// Create a router with a nil logger and string as the user ID type
+	r := NewRouter[string](RouterConfig{
 		Logger: nil,
 	})
 
@@ -42,11 +42,11 @@ func TestRegisterGenericRoute(t *testing.T) {
 		Age      int    `json:"age"`
 	}
 
-	// Create a router
-	r := NewRouter(RouterConfig{})
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{})
 
 	// Register a generic route
-	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
 		Path:    "/greet",
 		Methods: []string{"POST"},
 		Codec:   codec.NewJSONCodec[TestRequest, TestResponse](),
@@ -74,8 +74,8 @@ func TestRegisterGenericRoute(t *testing.T) {
 
 // TestHandleErrorWithHTTPError tests handling an error with an HTTPError
 func TestHandleErrorWithHTTPError(t *testing.T) {
-	// Create a router
-	r := NewRouter(RouterConfig{})
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{})
 
 	// Create an HTTPError
 	httpErr := NewHTTPError(http.StatusNotFound, "Not Found")
@@ -100,8 +100,8 @@ func TestHandleErrorWithHTTPError(t *testing.T) {
 
 // TestLoggingMiddleware tests the LoggingMiddleware function
 func TestLoggingMiddleware(t *testing.T) {
-	// Create a router
-	r := NewRouter(RouterConfig{})
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{})
 
 	// Create a handler and wrap it with the LoggingMiddleware
 	wrappedHandler := LoggingMiddleware(r.logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,11 +142,11 @@ func TestRegisterGenericRouteWithError(t *testing.T) {
 		Age      int    `json:"age"`
 	}
 
-	// Create a router
-	r := NewRouter(RouterConfig{})
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{})
 
 	// Register a generic route that returns an error
-	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
 		Path:    "/greet-error",
 		Methods: []string{"POST"},
 		Codec:   codec.NewJSONCodec[TestRequest, TestResponse](),
@@ -181,11 +181,11 @@ func TestRegisterGenericRouteWithEncodeError(t *testing.T) {
 		Age  int    `json:"age"`
 	}
 
-	// Create a router
-	r := NewRouter(RouterConfig{})
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{})
 
 	// Register a generic route that returns an unmarshalable response
-	RegisterGenericRoute(r, RouteConfig[TestRequest, UnmarshalableResponse]{
+	RegisterGenericRoute[TestRequest, UnmarshalableResponse, string](r, RouteConfig[TestRequest, UnmarshalableResponse]{
 		Path:    "/greet-encode-error",
 		Methods: []string{"POST"},
 		Codec:   codec.NewJSONCodec[TestRequest, UnmarshalableResponse](),
@@ -263,8 +263,8 @@ func TestResponseWriter(t *testing.T) {
 
 // TestShutdownWithCancel tests the Shutdown method with a canceled context
 func TestShutdownWithCancel(t *testing.T) {
-	// Create a router
-	r := NewRouter(RouterConfig{})
+	// Create a router with string as the user ID type
+	r := NewRouter[string](RouterConfig{})
 
 	// Create a context that is already canceled
 	ctx, cancel := context.WithCancel(context.Background())
