@@ -21,7 +21,7 @@ func TestRateLimit(t *testing.T) {
 	// Create a test handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Test with nil config (should skip rate limiting)
@@ -157,7 +157,7 @@ func TestRateLimit(t *testing.T) {
 		Strategy:   StrategyIP,
 		ExceededHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusPaymentRequired)
-			w.Write([]byte("Rate limit exceeded"))
+			_, _ = w.Write([]byte("Rate limit exceeded"))
 		}),
 	}
 	middleware = RateLimit(config, limiter, logger)

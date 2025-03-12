@@ -31,7 +31,7 @@ func TestClientIPMiddleware(t *testing.T) {
 	// Create a test handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := ClientIP(r)
-		w.Write([]byte(ip))
+		_, _ = w.Write([]byte(ip))
 	})
 
 	// Wrap the handler with the middleware

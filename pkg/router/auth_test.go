@@ -14,10 +14,18 @@ func TestAuthOptionalMiddleware(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := &Router{
-		logger: logger,
-	}
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
+		Logger: logger,
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a test handler
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

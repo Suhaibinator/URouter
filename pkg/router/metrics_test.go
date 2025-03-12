@@ -15,11 +15,26 @@ func TestMetrics(t *testing.T) {
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core)
 
-	// Create a router with metrics enabled
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register a route
 	r.RegisterRoute(RouteConfigBase{
@@ -91,11 +106,26 @@ func TestTracing(t *testing.T) {
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core)
 
-	// Create a router with tracing enabled
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		EnableTracing: true,
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register a route
 	r.RegisterRoute(RouteConfigBase{
@@ -174,8 +204,8 @@ func TestMetricsResponseWriter(t *testing.T) {
 	// Create a test response recorder
 	rr := httptest.NewRecorder()
 
-	// Create a metrics response writer
-	mrw := &metricsResponseWriter{
+	// Create a metrics response writer with string as both the user ID and user type
+	mrw := &metricsResponseWriter[string, string]{
 		ResponseWriter: rr,
 		statusCode:     http.StatusOK,
 	}

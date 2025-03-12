@@ -21,8 +21,8 @@ func TestRouteMatching(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
 		SubRouters: []SubRouterConfig{
 			{
@@ -43,7 +43,15 @@ func TestRouteMatching(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a test server
 	server := httptest.NewServer(r)
@@ -76,8 +84,8 @@ func TestSubRouterOverrides(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router with a global timeout of 1 second
-	r := NewRouter(RouterConfig{
+	// Create a router with a global timeout of 1 second and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 1 * time.Second,
 		SubRouters: []SubRouterConfig{
@@ -115,7 +123,15 @@ func TestSubRouterOverrides(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a test server
 	server := httptest.NewServer(r)
@@ -151,8 +167,8 @@ func TestBodySizeLimits(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a global max body size of 10 bytes
-	r := NewRouter(RouterConfig{
+	// Create a router with a global max body size of 10 bytes and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:            logger,
 		GlobalMaxBodySize: 10,
 		SubRouters: []SubRouterConfig{
@@ -199,7 +215,15 @@ func TestBodySizeLimits(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a test server
 	server := httptest.NewServer(r)
@@ -237,28 +261,36 @@ func TestBodySizeLimits(t *testing.T) {
 // TestJSONCodec tests that JSON marshaling and unmarshaling works correctly
 func TestJSONCodec(t *testing.T) {
 	// Define request and response types
-	type TestRequest struct {
+	type RouterTestRequest struct {
 		Name string `json:"name"`
 	}
-	type TestResponse struct {
+	type RouterTestResponse struct {
 		Greeting string `json:"greeting"`
 	}
 
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a generic JSON route
-	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute[RouterTestRequest, RouterTestResponse, string](r, RouteConfig[RouterTestRequest, RouterTestResponse]{
 		Path:    "/greet",
 		Methods: []string{"POST"},
-		Codec:   codec.NewJSONCodec[TestRequest, TestResponse](),
-		Handler: func(r *http.Request, req TestRequest) (TestResponse, error) {
-			return TestResponse{
+		Codec:   codec.NewJSONCodec[RouterTestRequest, RouterTestResponse](),
+		Handler: func(r *http.Request, req RouterTestRequest) (RouterTestResponse, error) {
+			return RouterTestResponse{
 				Greeting: "Hello, " + req.Name + "!",
 			}, nil
 		},
@@ -269,7 +301,7 @@ func TestJSONCodec(t *testing.T) {
 	defer server.Close()
 
 	// Create a request
-	reqBody, _ := json.Marshal(TestRequest{Name: "John"})
+	reqBody, _ := json.Marshal(RouterTestRequest{Name: "John"})
 	resp, err := http.Post(server.URL+"/greet", "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
 		t.Fatalf("Failed to send request: %v", err)
@@ -282,7 +314,7 @@ func TestJSONCodec(t *testing.T) {
 	}
 
 	// Check response body
-	var respBody TestResponse
+	var respBody RouterTestResponse
 	err = json.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)
@@ -307,8 +339,8 @@ func TestMiddlewareChaining(t *testing.T) {
 		}
 	}
 
-	// Create a router with global middleware
-	r := NewRouter(RouterConfig{
+	// Create a router with global middleware and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
 		Middlewares: []common.Middleware{
 			addHeaderMiddleware("Global", "true"),
@@ -337,7 +369,15 @@ func TestMiddlewareChaining(t *testing.T) {
 				},
 			},
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Create a test server
 	server := httptest.NewServer(r)
@@ -372,10 +412,18 @@ func TestShutdown(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a route that takes some time to complete
 	r.RegisterRoute(RouteConfigBase{

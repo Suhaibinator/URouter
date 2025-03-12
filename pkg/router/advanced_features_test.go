@@ -21,8 +21,8 @@ func TestPrometheusConfig(t *testing.T) {
 	// Create a registry
 	registry := prometheus.NewRegistry()
 
-	// Create a router with Prometheus config
-	r := NewRouter(RouterConfig{
+	// Create a router with Prometheus config and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		PrometheusConfig: &PrometheusConfig{
 			Registry:         registry,
 			Namespace:        "test",
@@ -32,7 +32,15 @@ func TestPrometheusConfig(t *testing.T) {
 			EnableQPS:        true,
 			EnableErrors:     true,
 		},
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a route
 	r.RegisterRoute(RouteConfigBase{
@@ -55,10 +63,18 @@ func TestGenericRouteDecodeError(t *testing.T) {
 	core, logs := observer.New(zap.ErrorLevel)
 	logger := zap.New(core)
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Define request and response types
 	type TestRequest struct {
@@ -69,7 +85,7 @@ func TestGenericRouteDecodeError(t *testing.T) {
 	}
 
 	// Register a generic route
-	RegisterGenericRoute(r, RouteConfig[TestRequest, TestResponse]{
+	RegisterGenericRoute[TestRequest, TestResponse, string](r, RouteConfig[TestRequest, TestResponse]{
 		Path:      "/greet",
 		Methods:   []string{"POST"},
 		AuthLevel: NoAuth, // No authentication required
@@ -119,11 +135,19 @@ func TestSlowRequestLogging(t *testing.T) {
 	core, logs := observer.New(zap.WarnLevel)
 	logger := zap.New(core)
 
-	// Create a router with metrics enabled
-	r := NewRouter(RouterConfig{
+	// Create a router with metrics enabled and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a route that takes a long time to respond
 	r.RegisterRoute(RouteConfigBase{
@@ -180,11 +204,19 @@ func TestErrorStatusLogging(t *testing.T) {
 	core, logs := observer.New(zap.ErrorLevel)
 	logger := zap.New(core)
 
-	// Create a router with metrics enabled
-	r := NewRouter(RouterConfig{
+	// Create a router with metrics enabled and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register routes that return different error status codes
 	r.RegisterRoute(RouteConfigBase{
@@ -238,11 +270,19 @@ func TestErrorStatusLogging(t *testing.T) {
 	core, logs = observer.New(zap.WarnLevel)
 	logger = zap.New(core)
 
-	// Create a new router with the new logger
-	r = NewRouter(RouterConfig{
+	// Create a new router with the new logger and string as both the user ID and user type
+	r = NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		EnableMetrics: true,
-	})
+	},
+		// Mock auth function that always returns invalid
+		func(token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register the client error route again
 	r.RegisterRoute(RouteConfigBase{
@@ -290,8 +330,8 @@ func TestMetricsResponseWriterFlush(t *testing.T) {
 		flushed:          false,
 	}
 
-	// Create a metrics response writer
-	mrw := &metricsResponseWriter{
+	// Create a metrics response writer with string as both the user ID and user type
+	mrw := &metricsResponseWriter[string, string]{
 		ResponseWriter: rr,
 		statusCode:     http.StatusOK,
 	}
@@ -323,10 +363,21 @@ func TestAuthMiddleware(t *testing.T) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	},
+		// Mock auth function that validates "token"
+		func(token string) (string, bool) {
+			if token == "token" {
+				return "user123", true
+			}
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
 
 	// Register a route that requires authentication
 	r.RegisterRoute(RouteConfigBase{
@@ -374,7 +425,7 @@ func TestLoggingMiddlewareWithFlusher(t *testing.T) {
 	// Create a handler that calls Flush
 	wrappedHandler := LoggingMiddleware(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 
 		// Check if the response writer implements http.Flusher
 		if f, ok := w.(http.Flusher); ok {

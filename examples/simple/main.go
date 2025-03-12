@@ -73,11 +73,26 @@ func main() {
 		},
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := router.NewRouter[string, string](routerConfig, authFunction, userIdFromUserFunction)
 
 	// Register a generic JSON route
-	router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
+	router.RegisterGenericRoute[CreateUserReq, CreateUserResp, string](r, router.RouteConfig[CreateUserReq, CreateUserResp]{
 		Path:      "/api/users",
 		Methods:   []string{"POST"},
 		AuthLevel: router.AuthRequired,

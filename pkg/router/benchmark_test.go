@@ -16,10 +16,25 @@ func BenchmarkRouterSimple(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a single route
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register a simple route
 	r.RegisterRoute(RouteConfigBase{
@@ -53,10 +68,25 @@ func BenchmarkRouterWithParams(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a route that has path parameters
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register a route with path parameters
 	r.RegisterRoute(RouteConfigBase{
@@ -102,13 +132,28 @@ func BenchmarkRouterWithMiddleware(b *testing.B) {
 		}
 	}
 
-	// Create a router with middleware
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
 		Middlewares: []Middleware{
 			addHeaderMiddleware("X-Global", "true"),
 		},
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register a route with middleware
 	r.RegisterRoute(RouteConfigBase{
@@ -145,11 +190,26 @@ func BenchmarkRouterWithTimeout(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with a timeout
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger:        logger,
 		GlobalTimeout: 1 * time.Second,
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register a route
 	r.RegisterRoute(RouteConfigBase{
@@ -183,10 +243,25 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router with many routes
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register many routes
 	for i := 0; i < 1000; i++ {
@@ -236,10 +311,25 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 	// Create a logger
 	logger := zap.NewNop()
 
-	// Create a router
-	r := NewRouter(RouterConfig{
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// This is a simple example, so we'll just validate that the token is not empty
+		if token != "" {
+			return token, true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
 		Logger: logger,
-	})
+	}, authFunction, userIdFromUserFunction)
 
 	// Register a route
 	r.RegisterRoute(RouteConfigBase{

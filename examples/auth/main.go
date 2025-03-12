@@ -96,8 +96,24 @@ func main() {
 		},
 	}
 
-	// Create a router
-	r := router.NewRouter(routerConfig)
+	// Define the auth function that takes a token and returns a string and a boolean
+	authFunction := func(token string) (string, bool) {
+		// Check if the token is valid
+		userID, ok := bearerTokens[token]
+		if ok {
+			return fmt.Sprintf("%d", userID), true
+		}
+		return "", false
+	}
+
+	// Define the function to get the user ID from a string
+	userIdFromUserFunction := func(user string) string {
+		// In this example, we're using the string itself as the ID
+		return user
+	}
+
+	// Create a router with string as both the user ID and user type
+	r := router.NewRouter[string, string](routerConfig, authFunction, userIdFromUserFunction)
 
 	// Start the server
 	fmt.Println("Authentication Example Server listening on :8080")
