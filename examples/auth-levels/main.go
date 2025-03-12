@@ -130,7 +130,7 @@ func main() {
 						Methods:   []string{"GET"},
 						AuthLevel: router.AuthOptional,
 						Middlewares: []router.Middleware{
-							middleware.AuthenticationWithUser[User](customUserAuth),
+							middleware.AuthenticationWithUser(customUserAuth),
 						},
 						Handler: optionalAuthHandler,
 					},
@@ -139,7 +139,7 @@ func main() {
 						Methods:   []string{"GET"},
 						AuthLevel: router.AuthRequired,
 						Middlewares: []router.Middleware{
-							middleware.AuthenticationWithUser[User](customUserAuth),
+							middleware.AuthenticationWithUser(customUserAuth),
 						},
 						Handler: requiredAuthHandler,
 					},

@@ -453,79 +453,12 @@ func TestGetUser(t *testing.T) {
 	}
 }
 
-func TestNewBasicAuthWithUserMiddleware(t *testing.T) {
-	// Create a logger
-	logger, _ := zap.NewDevelopment()
-
-	// Create a middleware
-	middleware := NewBasicAuthWithUserMiddleware[User](
-		func(username, password string) (*User, error) {
-			if username == "user1" && password == "pass1" {
-				return &User{
-					ID:    "1",
-					Name:  "User One",
-					Email: "user1@example.com",
-					Roles: []string{"user"},
-				}, nil
-			}
-			return nil, errors.New("invalid credentials")
-		},
-		logger,
-	)
-
-	// Create a handler
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get the user from the context
-		user := GetUser[User](r)
-		if user == nil {
-			t.Error("Expected user to be in context, got nil")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		if user.ID != "1" {
-			t.Errorf("Expected user ID to be '1', got '%s'", user.ID)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("OK"))
-		if err != nil {
-			t.Fatalf("Failed to write response: %v", err)
-		}
-	})
-
-	// Wrap the handler
-	wrappedHandler := middleware(handler)
-
-	// Test with valid credentials
-	req, _ := http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("user1", "pass1")
-	rr := httptest.NewRecorder()
-	wrappedHandler.ServeHTTP(rr, req)
-
-	// Check status code
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
-	}
-
-	// Test with invalid credentials
-	req, _ = http.NewRequest("GET", "/", nil)
-	req.SetBasicAuth("user1", "wrongpass")
-	rr = httptest.NewRecorder()
-	wrappedHandler.ServeHTTP(rr, req)
-
-	// Check status code
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("Expected status code %d, got %d", http.StatusUnauthorized, rr.Code)
-	}
-}
-
 func TestNewBearerTokenWithUserMiddleware(t *testing.T) {
 	// Create a logger
 	logger, _ := zap.NewDevelopment()
 
 	// Create a middleware
-	middleware := NewBearerTokenWithUserMiddleware[User](
+	middleware := NewBearerTokenWithUserMiddleware(
 		func(token string) (*User, error) {
 			if token == "token1" {
 				return &User{

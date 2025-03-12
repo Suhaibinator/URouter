@@ -17,58 +17,38 @@ import (
 // to be used with the AuthenticationWithProvider middleware.
 // The framework includes several implementations: BasicAuthProvider,
 // BearerTokenProvider, and APIKeyProvider.
-type AuthProvider interface {
-	// Authenticate authenticates a request and returns true if authentication is successful.
+// The type parameter T represents the user ID type, which can be any comparable type.
+type AuthProvider[T comparable] interface {
+	// Authenticate authenticates a request and returns the user ID if authentication is successful.
 	// It examines the request for authentication credentials (such as headers, cookies, or query parameters)
 	// and validates them according to the provider's implementation.
-	// Returns true if the request is authenticated, false otherwise.
-	Authenticate(r *http.Request) bool
-}
-
-// BasicAuthProvider provides HTTP Basic Authentication.
-// It validates username and password credentials against a predefined map.
-type BasicAuthProvider struct {
-	Credentials map[string]string // username -> password
-}
-
-// Authenticate authenticates a request using HTTP Basic Authentication.
-// It extracts the username and password from the Authorization header
-// and validates them against the stored credentials.
-// Returns true if authentication is successful, false otherwise.
-func (p *BasicAuthProvider) Authenticate(r *http.Request) bool {
-	username, password, ok := r.BasicAuth()
-	if !ok {
-		return false
-	}
-
-	expectedPassword, exists := p.Credentials[username]
-	if !exists {
-		return false
-	}
-
-	return password == expectedPassword
+	// Returns the user ID if the request is authenticated, the zero value of T otherwise.
+	Authenticate(r *http.Request) (T, bool)
 }
 
 // BearerTokenProvider provides Bearer Token Authentication.
 // It can validate tokens against a predefined map or using a custom validator function.
-type BearerTokenProvider struct {
-	ValidTokens map[string]bool         // token -> valid
-	Validator   func(token string) bool // optional token validator
+// The type parameter T represents the user ID type, which can be any comparable type.
+type BearerTokenProvider[T comparable] struct {
+	ValidTokens map[string]T                 // token -> user ID
+	Validator   func(token string) (T, bool) // optional token validator
 }
 
 // Authenticate authenticates a request using Bearer Token Authentication.
 // It extracts the token from the Authorization header and validates it
 // using either the validator function (if provided) or the ValidTokens map.
-// Returns true if authentication is successful, false otherwise.
-func (p *BearerTokenProvider) Authenticate(r *http.Request) bool {
+// Returns the user ID if authentication is successful, the zero value of T and false otherwise.
+func (p *BearerTokenProvider[T]) Authenticate(r *http.Request) (T, bool) {
+	var zeroValue T
+
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return false
+		return zeroValue, false
 	}
 
 	// Check if the header starts with "Bearer "
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return false
+		return zeroValue, false
 	}
 
 	// Extract the token
@@ -80,49 +60,62 @@ func (p *BearerTokenProvider) Authenticate(r *http.Request) bool {
 	}
 
 	// Otherwise, check if the token is in the valid tokens map
-	return p.ValidTokens[token]
+	if userID, ok := p.ValidTokens[token]; ok {
+		return userID, true
+	}
+
+	return zeroValue, false
 }
 
 // APIKeyProvider provides API Key Authentication.
 // It can validate API keys provided in a header or query parameter.
-type APIKeyProvider struct {
-	ValidKeys map[string]bool // key -> valid
-	Header    string          // header name (e.g., "X-API-Key")
-	Query     string          // query parameter name (e.g., "api_key")
+// The type parameter T represents the user ID type, which can be any comparable type.
+type APIKeyProvider[T comparable] struct {
+	ValidKeys map[string]T // key -> user ID
+	Header    string       // header name (e.g., "X-API-Key")
+	Query     string       // query parameter name (e.g., "api_key")
 }
 
 // Authenticate authenticates a request using API Key Authentication.
 // It checks for the API key in either the specified header or query parameter
 // and validates it against the stored valid keys.
-// Returns true if authentication is successful, false otherwise.
-func (p *APIKeyProvider) Authenticate(r *http.Request) bool {
+// Returns the user ID if authentication is successful, the zero value of T and false otherwise.
+func (p *APIKeyProvider[T]) Authenticate(r *http.Request) (T, bool) {
+	var zeroValue T
+
 	// Check header
 	if p.Header != "" {
 		key := r.Header.Get(p.Header)
-		if key != "" && p.ValidKeys[key] {
-			return true
+		if key != "" {
+			if userID, ok := p.ValidKeys[key]; ok {
+				return userID, true
+			}
 		}
 	}
 
 	// Check query parameter
 	if p.Query != "" {
 		key := r.URL.Query().Get(p.Query)
-		if key != "" && p.ValidKeys[key] {
-			return true
+		if key != "" {
+			if userID, ok := p.ValidKeys[key]; ok {
+				return userID, true
+			}
 		}
 	}
 
-	return false
+	return zeroValue, false
 }
 
 // AuthenticationWithProvider is a middleware that checks if a request is authenticated
 // using the provided auth provider. If authentication fails, it returns a 401 Unauthorized response.
 // This middleware allows for flexible authentication mechanisms by accepting any AuthProvider implementation.
-func AuthenticationWithProvider(provider AuthProvider, logger *zap.Logger) common.Middleware {
+// The type parameter T represents the user ID type, which can be any comparable type.
+func AuthenticationWithProvider[T comparable](provider AuthProvider[T], logger *zap.Logger) common.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check if the request is authenticated
-			if !provider.Authenticate(r) {
+			userID, ok := provider.Authenticate(r)
+			if !ok {
 				logger.Warn("Authentication failed",
 					zap.String("method", r.Method),
 					zap.String("path", r.URL.Path),
@@ -132,16 +125,52 @@ func AuthenticationWithProvider(provider AuthProvider, logger *zap.Logger) commo
 				return
 			}
 
-			// If authentication is successful, call the next handler
-			next.ServeHTTP(w, r)
+			// If authentication is successful, add the user ID to the context
+			ctx := context.WithValue(r.Context(), userIDContextKey[T]{}, userID)
+
+			// Call the next handler with the updated context
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
+// userIDContextKey is a custom type for the user ID context key to avoid collisions
+type userIDContextKey[T comparable] struct{}
+
+// GetUserID retrieves the user ID from the request context.
+// Returns the zero value of T and false if no user ID is found in the context.
+func GetUserID[T comparable](r *http.Request) (T, bool) {
+	userID, ok := r.Context().Value(userIDContextKey[T]{}).(T)
+	return userID, ok
+}
+
 // Authentication is a middleware that checks if a request is authenticated using a simple auth function.
-// This is a convenience wrapper around AuthenticationWithProvider for backward compatibility.
+// The type parameter T represents the user ID type, which can be any comparable type.
 // It allows for custom authentication logic to be provided as a simple function.
-func Authentication(authFunc func(*http.Request) bool) common.Middleware {
+func Authentication[T comparable](authFunc func(*http.Request) (T, bool)) common.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if the request is authenticated
+			userID, ok := authFunc(r)
+			if !ok {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			// If authentication is successful, add the user ID to the context
+			ctx := context.WithValue(r.Context(), userIDContextKey[T]{}, userID)
+
+			// Call the next handler with the updated context
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// AuthenticationBool is a middleware that checks if a request is authenticated using a simple auth function.
+// This is a convenience wrapper for backward compatibility.
+// It allows for custom authentication logic to be provided as a simple function that returns a boolean.
+// It adds a boolean value (true) to the request context if authentication is successful.
+func AuthenticationBool(authFunc func(*http.Request) bool) common.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Check if the request is authenticated
@@ -150,25 +179,20 @@ func Authentication(authFunc func(*http.Request) bool) common.Middleware {
 				return
 			}
 
-			// If authentication is successful, call the next handler
-			next.ServeHTTP(w, r)
+			// If authentication is successful, add a boolean value (true) to the context
+			ctx := context.WithValue(r.Context(), userIDContextKey[bool]{}, true)
+
+			// Call the next handler with the updated context
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// NewBasicAuthMiddleware creates a middleware that uses HTTP Basic Authentication.
-// It takes a map of username to password credentials and a logger for authentication failures.
-func NewBasicAuthMiddleware(credentials map[string]string, logger *zap.Logger) common.Middleware {
-	provider := &BasicAuthProvider{
-		Credentials: credentials,
-	}
-	return AuthenticationWithProvider(provider, logger)
-}
-
 // NewBearerTokenMiddleware creates a middleware that uses Bearer Token Authentication.
 // It takes a map of valid tokens and a logger for authentication failures.
-func NewBearerTokenMiddleware(validTokens map[string]bool, logger *zap.Logger) common.Middleware {
-	provider := &BearerTokenProvider{
+// The type parameter T represents the user ID type, which can be any comparable type.
+func NewBearerTokenMiddleware[T comparable](validTokens map[string]T, logger *zap.Logger) common.Middleware {
+	provider := &BearerTokenProvider[T]{
 		ValidTokens: validTokens,
 	}
 	return AuthenticationWithProvider(provider, logger)
@@ -177,8 +201,9 @@ func NewBearerTokenMiddleware(validTokens map[string]bool, logger *zap.Logger) c
 // NewBearerTokenValidatorMiddleware creates a middleware that uses Bearer Token Authentication
 // with a custom validator function. This allows for more complex token validation logic,
 // such as JWT validation or integration with external authentication services.
-func NewBearerTokenValidatorMiddleware(validator func(string) bool, logger *zap.Logger) common.Middleware {
-	provider := &BearerTokenProvider{
+// The type parameter T represents the user ID type, which can be any comparable type.
+func NewBearerTokenValidatorMiddleware[T comparable](validator func(string) (T, bool), logger *zap.Logger) common.Middleware {
+	provider := &BearerTokenProvider[T]{
 		Validator: validator,
 	}
 	return AuthenticationWithProvider(provider, logger)
@@ -187,8 +212,9 @@ func NewBearerTokenValidatorMiddleware(validator func(string) bool, logger *zap.
 // NewAPIKeyMiddleware creates a middleware that uses API Key Authentication.
 // It takes a map of valid API keys, the header and query parameter names to check,
 // and a logger for authentication failures.
-func NewAPIKeyMiddleware(validKeys map[string]bool, header, query string, logger *zap.Logger) common.Middleware {
-	provider := &APIKeyProvider{
+// The type parameter T represents the user ID type, which can be any comparable type.
+func NewAPIKeyMiddleware[T comparable](validKeys map[string]T, header, query string, logger *zap.Logger) common.Middleware {
+	provider := &APIKeyProvider[T]{
 		ValidKeys: validKeys,
 		Header:    header,
 		Query:     query,
@@ -338,15 +364,6 @@ func GetUser[T any](r *http.Request) *T {
 		return nil
 	}
 	return user
-}
-
-// NewBasicAuthWithUserMiddleware creates a middleware that uses HTTP Basic Authentication
-// and returns a user object.
-func NewBasicAuthWithUserMiddleware[T any](getUserFunc func(username, password string) (*T, error), logger *zap.Logger) common.Middleware {
-	provider := &BasicUserAuthProvider[T]{
-		GetUserFunc: getUserFunc,
-	}
-	return AuthenticationWithUserProvider(provider, logger)
 }
 
 // NewBearerTokenWithUserMiddleware creates a middleware that uses Bearer Token Authentication

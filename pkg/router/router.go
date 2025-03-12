@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ type Router struct {
 	router      *httprouter.Router
 	logger      *zap.Logger
 	middlewares []common.Middleware
+	rateLimiter middleware.RateLimiter
 	wg          sync.WaitGroup
 	shutdown    bool
 	shutdownMu  sync.RWMutex
@@ -37,6 +39,9 @@ const (
 	// This allows route parameters to be accessed from handlers and middleware.
 	ParamsKey contextKey = "params"
 )
+
+// userIDContextKey is a custom type for the user ID context key to avoid collisions
+type userIDContextKey struct{}
 
 // NewRouter creates a new Router with the given configuration.
 // It initializes the underlying httprouter, sets up logging, and registers routes from sub-routers.
@@ -56,13 +61,25 @@ func NewRouter(config RouterConfig) *Router {
 		}
 	}
 
+	// Create a rate limiter using Uber's ratelimit library
+	rateLimiter := middleware.NewUberRateLimiter()
+
 	// Create the router
 	r := &Router{
 		config:      config,
 		router:      hr,
 		logger:      logger,
 		middlewares: config.Middlewares,
+		rateLimiter: rateLimiter,
 	}
+
+	// Add IP middleware as the first middleware (before any other middleware)
+	// This ensures that the client IP is available in the request context for all other middleware
+	ipConfig := config.IPConfig
+	if ipConfig == nil {
+		ipConfig = middleware.DefaultIPConfig()
+	}
+	r.middlewares = append([]common.Middleware{middleware.ClientIPMiddleware(ipConfig)}, r.middlewares...)
 
 	// Add Prometheus middleware if configured
 	if config.PrometheusConfig != nil {
@@ -93,12 +110,13 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) {
 		// Create a full path by combining the sub-router prefix with the route path
 		fullPath := sr.PathPrefix + route.Path
 
-		// Get effective timeout and max body size for this route
+		// Get effective timeout, max body size, and rate limit for this route
 		timeout := r.getEffectiveTimeout(route.Timeout, sr.TimeoutOverride)
 		maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, sr.MaxBodySizeOverride)
+		rateLimit := r.getEffectiveRateLimit(route.RateLimit, sr.RateLimitOverride)
 
 		// Create a handler with all middlewares applied
-		handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, append(sr.Middlewares, route.Middlewares...))
+		handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, rateLimit, append(sr.Middlewares, route.Middlewares...))
 
 		// Register the route with httprouter
 		for _, method := range route.Methods {
@@ -111,12 +129,13 @@ func (r *Router) registerSubRouter(sr SubRouterConfig) {
 // It creates a handler with all middlewares applied and registers it with the underlying httprouter.
 // For generic routes with type parameters, use RegisterGenericRoute function instead.
 func (r *Router) RegisterRoute(route RouteConfigBase) {
-	// Get effective timeout and max body size for this route
+	// Get effective timeout, max body size, and rate limit for this route
 	timeout := r.getEffectiveTimeout(route.Timeout, 0)
 	maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, 0)
+	rateLimit := r.getEffectiveRateLimit(route.RateLimit, nil)
 
 	// Create a handler with all middlewares applied
-	handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
+	handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, rateLimit, route.Middlewares)
 
 	// Register the route with httprouter
 	for _, method := range route.Methods {
@@ -129,9 +148,10 @@ func (r *Router) RegisterRoute(route RouteConfigBase) {
 // It creates a handler that uses the codec to decode the request and encode the response,
 // applies middleware, and registers the route with the router.
 func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) {
-	// Get effective timeout and max body size for this route
+	// Get effective timeout, max body size, and rate limit for this route
 	timeout := r.getEffectiveTimeout(route.Timeout, 0)
 	maxBodySize := r.getEffectiveMaxBodySize(route.MaxBodySize, 0)
+	rateLimit := r.getEffectiveRateLimit(route.RateLimit, nil)
 
 	// Create a handler that uses the codec to decode the request and encode the response
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -158,7 +178,7 @@ func RegisterGenericRoute[T any, U any](r *Router, route RouteConfig[T, U]) {
 	})
 
 	// Create a handler with all middlewares applied
-	wrappedHandler := r.wrapHandler(handler, route.AuthLevel, timeout, maxBodySize, route.Middlewares)
+	wrappedHandler := r.wrapHandler(handler, route.AuthLevel, timeout, maxBodySize, rateLimit, route.Middlewares)
 
 	// Register the route with httprouter
 	for _, method := range route.Methods {
@@ -180,9 +200,9 @@ func (r *Router) convertToHTTPRouterHandle(handler http.Handler) httprouter.Hand
 }
 
 // wrapHandler wraps a handler with all the necessary middleware.
-// It applies authentication, timeout, body size limits, and other middleware
+// It applies authentication, timeout, body size limits, rate limiting, and other middleware
 // to create a complete request processing pipeline.
-func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, middlewares []Middleware) http.Handler {
+func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, rateLimit *middleware.RateLimitConfig, middlewares []Middleware) http.Handler {
 	// Create a handler that applies all the router's functionality
 	h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// First add to the wait group before checking shutdown status
@@ -263,6 +283,11 @@ func (r *Router) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, time
 		h = r.authOptionalMiddleware(h)
 	case NoAuth:
 		// No authentication middleware needed
+	}
+
+	// Apply rate limiting middleware if configured
+	if rateLimit != nil {
+		h = middleware.RateLimit(rateLimit, r.rateLimiter, r.logger)(h)
 	}
 
 	// Apply route-specific middlewares
@@ -436,6 +461,16 @@ func GetParam(r *http.Request, name string) string {
 	return GetParams(r).ByName(name)
 }
 
+// GetUserID retrieves the user ID from the request context.
+// Returns the user ID if it exists in the context, an empty string otherwise.
+func GetUserID(r *http.Request) string {
+	userID, ok := r.Context().Value(userIDContextKey{}).(string)
+	if !ok {
+		return ""
+	}
+	return userID
+}
+
 // getEffectiveTimeout returns the effective timeout for a route.
 // It considers route-specific, sub-router, and global timeout settings in that order of precedence.
 func (r *Router) getEffectiveTimeout(routeTimeout, subRouterTimeout time.Duration) time.Duration {
@@ -458,6 +493,18 @@ func (r *Router) getEffectiveMaxBodySize(routeMaxBodySize, subRouterMaxBodySize 
 		return subRouterMaxBodySize
 	}
 	return r.config.GlobalMaxBodySize
+}
+
+// getEffectiveRateLimit returns the effective rate limit for a route.
+// It considers route-specific, sub-router, and global rate limit settings in that order of precedence.
+func (r *Router) getEffectiveRateLimit(routeRateLimit, subRouterRateLimit *middleware.RateLimitConfig) *middleware.RateLimitConfig {
+	if routeRateLimit != nil {
+		return routeRateLimit
+	}
+	if subRouterRateLimit != nil {
+		return subRouterRateLimit
+	}
+	return r.config.GlobalRateLimit
 }
 
 // handleError handles an error by logging it and returning an appropriate HTTP response.
@@ -531,37 +578,45 @@ func (r *Router) recoveryMiddleware(next http.Handler) http.Handler {
 
 // authRequiredMiddleware is a middleware that requires authentication for a request.
 // If authentication fails, it returns a 401 Unauthorized response.
-// This is a placeholder implementation that just checks for the presence of an Authorization header.
-// In a real application, you would implement proper authentication logic here.
+// It uses the middleware.Authentication function with a configurable authentication function.
 func (r *Router) authRequiredMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// This is a placeholder for actual authentication logic
-		// In a real application, you would check for a valid token, session, etc.
-		// For now, we'll just check for the presence of an Authorization header
+	// Use the middleware.Authentication function with a default authentication function
+	// that checks for the presence of an Authorization header and returns a string user ID
+	// This can be replaced with a more sophisticated authentication function
+	// that uses JWT, OAuth, or other authentication mechanisms
+	return middleware.Authentication(func(req *http.Request) (string, bool) {
+		// Default authentication function that checks for the presence of an Authorization header
+		// This should be replaced with a proper authentication function in a real application
 		authHeader := req.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
+			return "", false
 		}
 
-		// If authentication is successful, call the next handler
-		next.ServeHTTP(w, req)
-	})
+		// Extract the token from the Authorization header
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+
+		// Return the token as the user ID
+		return token, true
+	})(next)
 }
 
 // authOptionalMiddleware is a middleware that attempts authentication for a request,
 // but allows the request to proceed even if authentication fails.
-// This is a placeholder implementation that just checks for the presence of an Authorization header.
-// In a real application, you would implement proper authentication logic here.
+// It tries to authenticate the request and adds the user ID to the context if successful,
+// but allows the request to proceed even if authentication fails.
 func (r *Router) authOptionalMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// This is a placeholder for actual authentication logic
-		// In a real application, you would check for a valid token, session, etc.
-		// For now, we'll just check for the presence of an Authorization header
+		// Try to authenticate the request
 		authHeader := req.Header.Get("Authorization")
 		if authHeader != "" {
-			// If authentication is successful, you would add the user to the context
-			// For now, we'll just log that authentication was successful
+			// Extract the token from the Authorization header
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+
+			// Add the token as the user ID to the context
+			ctx := context.WithValue(req.Context(), userIDContextKey{}, token)
+			req = req.WithContext(ctx)
+
+			// Log that authentication was successful
 			r.logger.Debug("Authentication successful",
 				zap.String("method", req.Method),
 				zap.String("path", req.URL.Path),
