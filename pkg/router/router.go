@@ -337,10 +337,14 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		defer func() {
 			duration := time.Since(mrw.startTime)
 
+			// Get trace ID from context
+			traceID := middleware.GetTraceID(req)
+
 			// Log metrics
 			if r.config.EnableMetrics {
 				// Use Debug level for metrics to avoid log spam
 				r.logger.Debug("Request metrics",
+					zap.String("trace_id", traceID),
 					zap.String("method", req.Method),
 					zap.String("path", req.URL.Path),
 					zap.Int("status", mrw.statusCode),
@@ -351,6 +355,7 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				// Log slow requests at Warn level
 				if duration > 1*time.Second {
 					r.logger.Warn("Slow request",
+						zap.String("trace_id", traceID),
 						zap.String("method", req.Method),
 						zap.String("path", req.URL.Path),
 						zap.Int("status", mrw.statusCode),
@@ -361,6 +366,7 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				// Log errors at Error level
 				if mrw.statusCode >= 500 {
 					r.logger.Error("Server error",
+						zap.String("trace_id", traceID),
 						zap.String("method", req.Method),
 						zap.String("path", req.URL.Path),
 						zap.Int("status", mrw.statusCode),
@@ -368,6 +374,7 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					)
 				} else if mrw.statusCode >= 400 {
 					r.logger.Warn("Client error",
+						zap.String("trace_id", traceID),
 						zap.String("method", req.Method),
 						zap.String("path", req.URL.Path),
 						zap.Int("status", mrw.statusCode),
@@ -380,6 +387,7 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if r.config.EnableTracing {
 				// Use Debug level for tracing to avoid log spam
 				r.logger.Debug("Request trace",
+					zap.String("trace_id", traceID),
 					zap.String("method", req.Method),
 					zap.String("path", req.URL.Path),
 					zap.String("remote_addr", req.RemoteAddr),
@@ -516,8 +524,12 @@ func (r *Router[T, U]) getEffectiveRateLimit(routeRateLimit, subRouterRateLimit 
 // handleError handles an error by logging it and returning an appropriate HTTP response.
 // It checks if the error is a specific HTTPError and uses its status code and message if available.
 func (r *Router[T, U]) handleError(w http.ResponseWriter, req *http.Request, err error, statusCode int, message string) {
+	// Get trace ID from context
+	traceID := middleware.GetTraceID(req)
+
 	// Log the error
 	r.logger.Error(message,
+		zap.String("trace_id", traceID),
 		zap.Error(err),
 		zap.String("method", req.Method),
 		zap.String("path", req.URL.Path),
@@ -566,8 +578,12 @@ func (r *Router[T, U]) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
+				// Get trace ID from context
+				traceID := middleware.GetTraceID(req)
+
 				// Log the panic
 				r.logger.Error("Panic recovered",
+					zap.String("trace_id", traceID),
 					zap.Any("panic", rec),
 					zap.String("method", req.Method),
 					zap.String("path", req.URL.Path),
@@ -602,16 +618,24 @@ func (r *Router[T, U]) authRequiredMiddleware(next http.Handler) http.Handler {
 			// Add the user ID to the request context
 			ctx := context.WithValue(req.Context(), userIDContextKey[T]{}, id)
 			req = req.WithContext(ctx)
+			// Get trace ID from context
+			traceID := middleware.GetTraceID(req)
+
 			// Log that authentication was successful
 			r.logger.Debug("Authentication successful",
+				zap.String("trace_id", traceID),
 				zap.String("method", req.Method),
 				zap.String("path", req.URL.Path),
 			)
 			return &user, nil
 		}
 
+		// Get trace ID from context
+		traceID := middleware.GetTraceID(req)
+
 		// Log that authentication failed
 		r.logger.Warn("Authentication failed",
+			zap.String("trace_id", traceID),
 			zap.String("method", req.Method),
 			zap.String("path", req.URL.Path),
 			zap.String("remote_addr", req.RemoteAddr),
@@ -641,8 +665,12 @@ func (r *Router[T, U]) authOptionalMiddleware(next http.Handler) http.Handler {
 					ctx = context.WithValue(ctx, userObjectContextKey[U]{}, &user)
 				}
 				req = req.WithContext(ctx)
+				// Get trace ID from context
+				traceID := middleware.GetTraceID(req)
+
 				// Log that authentication was successful
 				r.logger.Debug("Authentication successful",
+					zap.String("trace_id", traceID),
 					zap.String("method", req.Method),
 					zap.String("path", req.URL.Path),
 				)
@@ -670,8 +698,12 @@ func LoggingMiddleware(logger *zap.Logger) Middleware {
 			// Call the next handler
 			next.ServeHTTP(rw, req)
 
+			// Get trace ID from context
+			traceID := middleware.GetTraceID(req)
+
 			// Log the request
 			logger.Info("Request",
+				zap.String("trace_id", traceID),
 				zap.String("method", req.Method),
 				zap.String("path", req.URL.Path),
 				zap.Int("status", rw.statusCode),
