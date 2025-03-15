@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,7 +35,7 @@ func TestPrometheusConfig(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -68,7 +69,7 @@ func TestGenericRouteDecodeError(t *testing.T) {
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -141,7 +142,7 @@ func TestSlowRequestLogging(t *testing.T) {
 		EnableMetrics: true,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -210,7 +211,7 @@ func TestErrorStatusLogging(t *testing.T) {
 		EnableMetrics: true,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -276,7 +277,7 @@ func TestErrorStatusLogging(t *testing.T) {
 		EnableMetrics: true,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -368,7 +369,7 @@ func TestAuthMiddleware(t *testing.T) {
 		Logger: logger,
 	},
 		// Mock auth function that validates "token"
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			if token == "token" {
 				return "user123", true
 			}

@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,7 @@ func BenchmarkRouterSimple(b *testing.B) {
 	logger := zap.NewNop()
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true
@@ -69,7 +70,7 @@ func BenchmarkRouterWithParams(b *testing.B) {
 	logger := zap.NewNop()
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true
@@ -133,7 +134,7 @@ func BenchmarkRouterWithMiddleware(b *testing.B) {
 	}
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true
@@ -191,7 +192,7 @@ func BenchmarkRouterWithTimeout(b *testing.B) {
 	logger := zap.NewNop()
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true
@@ -244,7 +245,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	logger := zap.NewNop()
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true
@@ -312,7 +313,7 @@ func BenchmarkConcurrentRequests(b *testing.B) {
 	logger := zap.NewNop()
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true

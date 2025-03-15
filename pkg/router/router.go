@@ -24,7 +24,7 @@ type Router[T comparable, U any] struct {
 	router            *httprouter.Router
 	logger            *zap.Logger
 	middlewares       []common.Middleware
-	authFunction      func(string) (U, bool)
+	authFunction      func(context.Context, string) (U, bool)
 	getUserIdFromUser func(U) T
 	rateLimiter       middleware.RateLimiter
 	wg                sync.WaitGroup
@@ -52,7 +52,7 @@ type userObjectContextKey[U any] struct{}
 
 // NewRouter creates a new Router with the given configuration.
 // It initializes the underlying httprouter, sets up logging, and registers routes from sub-routers.
-func NewRouter[T comparable, U any](config RouterConfig, authFunction func(string) (U, bool), userIdFromuserFunction func(U) T) *Router[T, U] {
+func NewRouter[T comparable, U any](config RouterConfig, authFunction func(context.Context, string) (U, bool), userIdFromuserFunction func(U) T) *Router[T, U] {
 	// Initialize the httprouter
 	hr := httprouter.New()
 
@@ -662,7 +662,7 @@ func (r *Router[T, U]) authRequiredMiddleware(next http.Handler) http.Handler {
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 
 		// Try to authenticate using the authFunction
-		if user, valid := r.authFunction(token); valid {
+		if user, valid := r.authFunction(req.Context(), token); valid {
 			id := r.getUserIdFromUser(user)
 			// Add the user ID to the request context
 			ctx := context.WithValue(req.Context(), userIDContextKey[T]{}, id)
@@ -720,7 +720,7 @@ func (r *Router[T, U]) authOptionalMiddleware(next http.Handler) http.Handler {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 
 			// Try to authenticate using the authFunction
-			if user, valid := r.authFunction(token); valid {
+			if user, valid := r.authFunction(req.Context(), token); valid {
 				id := r.getUserIdFromUser(user)
 				// Add the user ID to the request context
 				ctx := context.WithValue(req.Context(), userIDContextKey[T]{}, id)

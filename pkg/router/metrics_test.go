@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,7 +17,7 @@ func TestMetrics(t *testing.T) {
 	logger := zap.New(core)
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true
@@ -107,7 +108,7 @@ func TestTracing(t *testing.T) {
 	logger := zap.New(core)
 
 	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true

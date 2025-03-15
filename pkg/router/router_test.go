@@ -45,7 +45,7 @@ func TestRouteMatching(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -125,7 +125,7 @@ func TestSubRouterOverrides(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -217,7 +217,7 @@ func TestBodySizeLimits(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -276,7 +276,7 @@ func TestJSONCodec(t *testing.T) {
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -371,7 +371,7 @@ func TestMiddlewareChaining(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -417,7 +417,7 @@ func TestShutdown(t *testing.T) {
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself

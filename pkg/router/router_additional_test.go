@@ -18,7 +18,7 @@ func TestNewRouterWithNilLogger(t *testing.T) {
 		Logger: nil,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -53,7 +53,7 @@ func TestRegisterGenericRoute(t *testing.T) {
 	// Create a router with string as both the user ID and user type
 	r := NewRouter(RouterConfig{},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -93,7 +93,7 @@ func TestHandleErrorWithHTTPError(t *testing.T) {
 	// Create a router with string as both the user ID and user type
 	r := NewRouter(RouterConfig{},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -127,7 +127,7 @@ func TestLoggingMiddleware(t *testing.T) {
 	// Create a router with string as both the user ID and user type
 	r := NewRouter(RouterConfig{},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -177,7 +177,7 @@ func TestRegisterGenericRouteWithError(t *testing.T) {
 	// Create a router with string as both the user ID and user type
 	r := NewRouter(RouterConfig{},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -224,7 +224,7 @@ func TestRegisterGenericRouteWithEncodeError(t *testing.T) {
 	// Create a router with string as both the user ID and user type
 	r := NewRouter(RouterConfig{},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -314,7 +314,7 @@ func TestShutdownWithCancel(t *testing.T) {
 	// Create a router with string as both the user ID and user type
 	r := NewRouter(RouterConfig{},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself

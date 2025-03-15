@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -32,7 +33,7 @@ func main() {
 	}
 
 	// Define the auth function
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		if token != "" {
 			return token, true
 		}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -261,8 +262,8 @@ func main() {
 		GlobalMaxBodySize: 1 << 20, // 1 MB
 	}
 
-	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
+	// Define the auth function that takes a context and token and returns a string and a boolean
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		// This is a simple example, so we'll just validate that the token is not empty
 		if token != "" {
 			return token, true

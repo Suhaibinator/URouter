@@ -57,7 +57,7 @@ func TestSubRouterIntegration(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -134,7 +134,7 @@ func TestPathParameters(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -221,7 +221,7 @@ func TestTimeoutOverrides(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -306,7 +306,7 @@ func TestMaxBodySizeOverrides(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -365,7 +365,7 @@ func TestGenericRouteIntegration(t *testing.T) {
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -462,7 +462,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 		},
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -511,7 +511,7 @@ func TestGracefulShutdown(t *testing.T) {
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -594,7 +594,7 @@ func TestEdgeCases(t *testing.T) {
 		Logger: logger,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself

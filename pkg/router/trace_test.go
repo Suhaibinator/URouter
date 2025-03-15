@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,7 +24,7 @@ func TestTraceIDLogging(t *testing.T) {
 		EnableTraceID: true,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -94,7 +95,7 @@ func TestTraceIDLoggingDisabled(t *testing.T) {
 		EnableTraceID: false,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -277,7 +278,7 @@ func TestHandleErrorWithTraceID(t *testing.T) {
 		EnableTraceID: true,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -337,7 +338,7 @@ func TestHandleErrorWithoutTraceID(t *testing.T) {
 		EnableTraceID: false,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -397,7 +398,7 @@ func TestRecoveryMiddlewareWithTraceID(t *testing.T) {
 		EnableTraceID: true,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself
@@ -465,7 +466,7 @@ func TestRecoveryMiddlewareWithoutTraceID(t *testing.T) {
 		EnableTraceID: false,
 	},
 		// Mock auth function that always returns invalid
-		func(token string) (string, bool) {
+		func(ctx context.Context, token string) (string, bool) {
 			return "", false
 		},
 		// Mock user ID function that returns the string itself

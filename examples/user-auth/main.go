@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -184,8 +185,8 @@ func main() {
 		},
 	}
 
-	// Define the auth function that takes a token and returns a User and a boolean
-	authFunction := func(token string) (User, bool) {
+	// Define the auth function that takes a context and token and returns a User and a boolean
+	authFunction := func(ctx context.Context, token string) (User, bool) {
 		// Look up the username for this token
 		username, exists := tokens[token]
 		if !exists {

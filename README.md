@@ -71,14 +71,15 @@ func main() {
 		GlobalMaxBodySize: 1 << 20, // 1 MB
 	}
 
-	// Define the auth function that takes a token and returns a string and a boolean
-	authFunction := func(token string) (string, bool) {
-		// This is a simple example, so we'll just validate that the token is not empty
-		if token != "" {
-			return token, true
-		}
-		return "", false
+// Define the auth function that takes a context and token and returns a string and a boolean
+// Note: The router's auth function includes context, but middleware auth functions don't
+authFunction := func(ctx context.Context, token string) (string, bool) {
+	// This is a simple example, so we'll just validate that the token is not empty
+	if token != "" {
+		return token, true
 	}
+	return "", false
+}
 
 	// Define the function to get the user ID from a string
 	userIdFromUserFunction := func(user string) string {
@@ -1081,16 +1082,19 @@ authMiddleware := middleware.NewBearerTokenMiddleware(
 #### Bearer Token with Validator
 
 ```go
-middleware.NewBearerTokenValidatorMiddleware(validator func(string) bool, logger *zap.Logger) Middleware
+middleware.NewBearerTokenValidatorMiddleware[T comparable](validator func(string) (T, bool), logger *zap.Logger) Middleware
 ```
 
 Example:
 ```go
 // Create a middleware that uses bearer token authentication with a validator function
 authMiddleware := middleware.NewBearerTokenValidatorMiddleware(
-    func(token string) bool {
+    func(token string) (string, bool) {
         // Validate the token (e.g., verify JWT, check against database, etc.)
-        return validateToken(token)
+        if validateToken(token) {
+            return token, true // Return the token as the user ID if valid
+        }
+        return "", false
     },
     logger,
 )

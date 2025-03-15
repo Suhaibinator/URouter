@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,7 +17,7 @@ func TestAuthOptionalMiddlewareWithValidToken(t *testing.T) {
 	}
 
 	// Auth function that accepts "valid-token" and returns user ID 123
-	authFunction := func(token string) (string, bool) {
+	authFunction := func(ctx context.Context, token string) (string, bool) {
 		if token == "valid-token" {
 			return "user123", true
 		}
