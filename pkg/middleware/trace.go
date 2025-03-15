@@ -32,19 +32,19 @@ func TraceMiddleware() common.Middleware {
 }
 
 // GetTraceID extracts the trace ID from the request context.
-// Returns "unknown" if no trace ID is found.
+// Returns an empty string if no trace ID is found.
 func GetTraceID(r *http.Request) string {
 	if traceID, ok := r.Context().Value(TraceIDKey).(string); ok {
 		return traceID
 	}
-	return "unknown"
+	return ""
 }
 
 // GetTraceIDFromContext extracts the trace ID from a context.
-// Returns "unknown" if no trace ID is found.
+// Returns an empty string if no trace ID is found.
 func GetTraceIDFromContext(ctx context.Context) string {
 	if traceID, ok := ctx.Value(TraceIDKey).(string); ok {
 		return traceID
 	}
-	return "unknown"
+	return ""
 }

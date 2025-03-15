@@ -423,7 +423,7 @@ func TestLoggingMiddlewareWithFlusher(t *testing.T) {
 	logger := zap.NewNop()
 
 	// Create a handler that calls Flush
-	wrappedHandler := LoggingMiddleware(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	wrappedHandler := LoggingMiddleware(logger, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("Hello, World!"))
 

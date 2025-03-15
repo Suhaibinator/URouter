@@ -136,7 +136,7 @@ func TestLoggingMiddleware(t *testing.T) {
 		})
 
 	// Create a handler and wrap it with the LoggingMiddleware
-	wrappedHandler := LoggingMiddleware(r.logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	wrappedHandler := LoggingMiddleware(r.logger, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("Hello, World!"))
 		if err != nil {

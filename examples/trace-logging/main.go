@@ -25,6 +25,7 @@ func main() {
 		Logger:            logger,
 		GlobalTimeout:     2 * time.Second,
 		GlobalMaxBodySize: 1 << 20, // 1 MB
+		EnableTraceID:     true,    // Enable trace ID logging
 		Middlewares: []common.Middleware{
 			middleware.TraceMiddleware(), // Add trace middleware
 		},
