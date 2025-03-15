@@ -36,6 +36,7 @@ go get github.com/Suhaibinator/SRouter
 - [go.uber.org/zap](https://github.com/uber-go/zap) v1.27.0 or higher for structured logging
 - [github.com/google/uuid](https://github.com/google/uuid) v1.6.0 or higher for trace ID generation
 - [github.com/prometheus/client_golang](https://github.com/prometheus/client_golang) v1.21.1 or higher for Prometheus metrics (optional)
+- [go.uber.org/ratelimit](https://github.com/uber-go/ratelimit) v0.3.1 or higher for rate limiting (optional)
 
 All dependencies are properly documented with Go modules and will be automatically installed when you run `go get github.com/Suhaibinator/SRouter`.
 
@@ -174,7 +175,7 @@ func CreateUserHandler(r *http.Request, req CreateUserReq) (CreateUserResp, erro
 }
 
 // Register the generic route
-router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
+router.RegisterGenericRoute[CreateUserReq, CreateUserResp, string](r, router.RouteConfig[CreateUserReq, CreateUserResp]{
 	Path:        "/api/users",
 	Methods:     []string{"POST"},
 	AuthLevel:   router.AuthRequired,
@@ -182,6 +183,8 @@ router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]
 	Handler:     CreateUserHandler,
 })
 ```
+
+Note that the `RegisterGenericRoute` function takes three type parameters: the request type, the response type, and the user type. The user type should match the second type parameter of your router.
 
 ### Using Path Parameters
 
@@ -207,7 +210,22 @@ SRouter provides built-in support for trace ID logging, which allows you to corr
 
 #### Enabling Trace ID Logging
 
-To enable trace ID logging, add the `TraceMiddleware` to your router configuration:
+There are two ways to enable trace ID logging:
+
+1. Using the `EnableTraceID` configuration option:
+
+```go
+// Create a router with trace ID logging enabled
+routerConfig := router.RouterConfig{
+    Logger:        logger,
+    EnableTraceID: true, // Enable trace ID logging
+    // Other configuration...
+}
+
+r := router.NewRouter[string, User](config, authFunction, getUserIDFunction)
+```
+
+2. Using the `TraceMiddleware`:
 
 ```go
 // Create a router with trace middleware
@@ -277,6 +295,8 @@ func processData(ctx context.Context) {
 }
 ```
 
+See the `examples/trace-logging` directory for a complete example of trace ID logging.
+
 ### Graceful Shutdown
 
 SRouter provides a `Shutdown` method for graceful shutdown:
@@ -314,6 +334,8 @@ if err := srv.Shutdown(ctx); err != nil {
 	log.Fatalf("Server shutdown failed: %v", err)
 }
 ```
+
+See the `examples/graceful-shutdown` directory for a complete example of graceful shutdown.
 
 ## Advanced Usage
 
@@ -361,6 +383,8 @@ The `TrustProxy` setting determines whether to trust proxy headers:
 - If `false` or if the specified source doesn't contain an IP, the request's RemoteAddr will be used as a fallback
 
 This is important for security, as malicious clients could potentially spoof headers if your application blindly trusts them.
+
+See the `examples/middleware` directory for examples of using IP configuration.
 
 ### Rate Limiting
 
@@ -550,6 +574,8 @@ routerConfig := router.RouterConfig{
 }
 ```
 
+See the `examples/auth-levels` directory for a complete example of authentication levels.
+
 #### Authentication Approaches
 
 SRouter provides two approaches to authentication:
@@ -708,7 +734,7 @@ middleware.NewAPIKeyWithUserMiddleware[User](
 )
 ```
 
-See the `examples/user-auth` directory for a complete example of user-returning authentication and the `examples/auth-levels` directory for a complete example of authentication levels.
+See the `examples/user-auth` directory for a complete example of user-returning authentication and the `examples/auth` directory for a complete example of basic authentication.
 
 ### Custom Error Handling
 
@@ -779,6 +805,8 @@ routerConfig := router.RouterConfig{
 }
 ```
 
+See the `examples/middleware` directory for examples of custom middleware.
+
 ### Custom Codec
 
 You can create custom codecs for different data formats:
@@ -827,7 +855,7 @@ func NewXMLCodec[T any, U any]() *XMLCodec[T, U] {
 }
 
 // Use the XML codec with a generic route
-router.RegisterGenericRoute(r, router.RouteConfig[CreateUserReq, CreateUserResp]{
+router.RegisterGenericRoute[CreateUserReq, CreateUserResp, string](r, router.RouteConfig[CreateUserReq, CreateUserResp]{
 	Path:        "/api/users",
 	Methods:     []string{"POST"},
 	AuthLevel:   router.NoAuth, // No authentication required
@@ -874,20 +902,44 @@ mux.Handle("/", r)
 http.ListenAndServe(":8080", mux)
 ```
 
+See the `examples/prometheus` directory for a complete example of Prometheus metrics.
+
+## Examples
+
+SRouter includes several examples to help you get started:
+
+- **examples/simple**: A simple example of using SRouter with basic routes
+- **examples/auth**: An example of using authentication with SRouter
+- **examples/auth-levels**: An example of using different authentication levels with SRouter
+- **examples/user-auth**: An example of using user-returning authentication with SRouter
+- **examples/generic**: An example of using generic routes with SRouter
+- **examples/graceful-shutdown**: An example of graceful shutdown with SRouter
+- **examples/middleware**: An example of using middleware with SRouter
+- **examples/prometheus**: An example of using Prometheus metrics with SRouter
+- **examples/rate-limiting**: An example of using rate limiting with SRouter
+- **examples/subrouters**: An example of using sub-routers with SRouter
+- **examples/trace-logging**: An example of using trace ID logging with SRouter
+
+Each example includes a complete, runnable application that demonstrates a specific feature of SRouter.
+
 ## Configuration Reference
 
 ### RouterConfig
 
 ```go
 type RouterConfig struct {
-	Logger            *zap.Logger         // Logger for all router operations
-	GlobalTimeout     time.Duration       // Default response timeout for all routes
-	GlobalMaxBodySize int64               // Default maximum request body size in bytes
-	EnableMetrics     bool                // Enable metrics collection
-	EnableTracing     bool                // Enable distributed tracing
-	PrometheusConfig  *PrometheusConfig   // Prometheus metrics configuration (optional)
-	SubRouters        []SubRouterConfig   // Sub-routers with their own configurations
-	Middlewares       []common.Middleware // Global middlewares applied to all routes
+	Logger             *zap.Logger                 // Logger for all router operations
+	GlobalTimeout      time.Duration               // Default response timeout for all routes
+	GlobalMaxBodySize  int64                       // Default maximum request body size in bytes
+	GlobalRateLimit    *middleware.RateLimitConfig // Default rate limit for all routes
+	IPConfig           *middleware.IPConfig        // Configuration for client IP extraction
+	EnableMetrics      bool                        // Enable metrics collection
+	EnableTracing      bool                        // Enable distributed tracing
+	EnableTraceID      bool                        // Enable trace ID logging
+	PrometheusConfig   *router.PrometheusConfig    // Prometheus metrics configuration (optional)
+	SubRouters         []SubRouterConfig           // Sub-routers with their own configurations
+	Middlewares        []common.Middleware         // Global middlewares applied to all routes
+	AddUserObjectToCtx bool                        // Add user object to context
 }
 ```
 
@@ -909,11 +961,12 @@ type PrometheusConfig struct {
 
 ```go
 type SubRouterConfig struct {
-	PathPrefix          string              // Common path prefix for all routes in this sub-router
-	TimeoutOverride     time.Duration       // Override global timeout for all routes in this sub-router
-	MaxBodySizeOverride int64               // Override global max body size for all routes in this sub-router
-	Routes              []RouteConfigBase   // Routes in this sub-router
-	Middlewares         []common.Middleware // Middlewares applied to all routes in this sub-router
+	PathPrefix          string                      // Common path prefix for all routes in this sub-router
+	TimeoutOverride     time.Duration               // Override global timeout for all routes in this sub-router
+	MaxBodySizeOverride int64                       // Override global max body size for all routes in this sub-router
+	RateLimitOverride   *middleware.RateLimitConfig // Override global rate limit for all routes in this sub-router
+	Routes              []RouteConfigBase           // Routes in this sub-router
+	Middlewares         []common.Middleware         // Middlewares applied to all routes in this sub-router
 }
 ```
 
@@ -921,13 +974,14 @@ type SubRouterConfig struct {
 
 ```go
 type RouteConfigBase struct {
-	Path        string              // Route path (will be prefixed with sub-router path prefix if applicable)
-	Methods     []string            // HTTP methods this route handles
-	AuthLevel   AuthLevel           // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
-	Timeout     time.Duration       // Override timeout for this specific route
-	MaxBodySize int64               // Override max body size for this specific route
-	Handler     http.HandlerFunc    // Standard HTTP handler function
-	Middlewares []common.Middleware // Middlewares applied to this specific route
+	Path        string                      // Route path (will be prefixed with sub-router path prefix if applicable)
+	Methods     []string                    // HTTP methods this route handles
+	AuthLevel   AuthLevel                   // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
+	Timeout     time.Duration               // Override timeout for this specific route
+	MaxBodySize int64                       // Override max body size for this specific route
+	RateLimit   *middleware.RateLimitConfig // Rate limit for this specific route
+	Handler     http.HandlerFunc            // Standard HTTP handler function
+	Middlewares []common.Middleware         // Middlewares applied to this specific route
 }
 ```
 
@@ -935,14 +989,15 @@ type RouteConfigBase struct {
 
 ```go
 type RouteConfig[T any, U any] struct {
-	Path        string               // Route path (will be prefixed with sub-router path prefix if applicable)
-	Methods     []string             // HTTP methods this route handles
-	AuthLevel   AuthLevel            // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
-	Timeout     time.Duration        // Override timeout for this specific route
-	MaxBodySize int64                // Override max body size for this specific route
-	Codec       Codec[T, U]          // Codec for marshaling/unmarshaling request and response
-	Handler     GenericHandler[T, U] // Generic handler function
-	Middlewares []common.Middleware  // Middlewares applied to this specific route
+	Path        string                      // Route path (will be prefixed with sub-router path prefix if applicable)
+	Methods     []string                    // HTTP methods this route handles
+	AuthLevel   AuthLevel                   // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
+	Timeout     time.Duration               // Override timeout for this specific route
+	MaxBodySize int64                       // Override max body size for this specific route
+	RateLimit   *middleware.RateLimitConfig // Rate limit for this specific route
+	Codec       Codec[T, U]                 // Codec for marshaling/unmarshaling request and response
+	Handler     GenericHandler[T, U]        // Generic handler function
+	Middlewares []common.Middleware         // Middlewares applied to this specific route
 }
 ```
 
@@ -1134,6 +1189,14 @@ Creates a handler for exposing Prometheus metrics:
 middleware.PrometheusHandler(registry interface{}) http.Handler
 ```
 
+### TraceMiddleware
+
+Adds trace ID to the request context:
+
+```go
+middleware.TraceMiddleware() Middleware
+```
+
 ## Codec Reference
 
 SRouter provides two built-in codecs:
@@ -1266,70 +1329,6 @@ config := zap.NewProductionConfig()
 config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 logger, _ := config.Build()
 ```
-
-### Metrics and Tracing
-
-SRouter provides built-in support for metrics collection and distributed tracing. You can enable these features by setting the `EnableMetrics` and `EnableTracing` flags in the `RouterConfig`:
-
-```go
-routerConfig := router.RouterConfig{
-    // ...
-    EnableMetrics: true,
-    EnableTracing: true,
-    // ...
-}
-```
-
-When metrics are enabled, SRouter will log detailed information about each request, including:
-- HTTP method and path
-- Status code
-- Response time
-- Response size in bytes
-
-When tracing is enabled, SRouter will log additional information about each request, including:
-- Remote address
-- User agent
-- Request headers
-- Request timing
-
-This information can be used to monitor the performance of your application and identify bottlenecks.
-
-### Prometheus Metrics
-
-SRouter also supports Prometheus metrics collection. You can enable this feature by providing a `PrometheusConfig` in the `RouterConfig`:
-
-```go
-routerConfig := router.RouterConfig{
-    // ...
-    PrometheusConfig: &router.PrometheusConfig{
-        Registry:         promRegistry,
-        Namespace:        "myapp",
-        Subsystem:        "api",
-        EnableLatency:    true,
-        EnableThroughput: true,
-        EnableQPS:        true,
-        EnableErrors:     true,
-    },
-    // ...
-}
-```
-
-The `PrometheusConfig` allows you to configure:
-- `Registry`: The Prometheus registry to use (e.g., `prometheus.DefaultRegisterer`)
-- `Namespace`: The namespace for metrics (e.g., "myapp")
-- `Subsystem`: The subsystem for metrics (e.g., "api")
-- `EnableLatency`: Whether to collect latency metrics
-- `EnableThroughput`: Whether to collect throughput metrics (bytes)
-- `EnableQPS`: Whether to collect queries per second metrics
-- `EnableErrors`: Whether to collect error metrics
-
-You can expose the Prometheus metrics using the `middleware.PrometheusHandler` function:
-
-```go
-http.Handle("/metrics", middleware.PrometheusHandler(promRegistry))
-```
-
-This will expose the metrics at the `/metrics` endpoint, which can be scraped by Prometheus.
 
 ## License
 
