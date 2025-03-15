@@ -20,7 +20,7 @@ func TestTraceMiddleware(t *testing.T) {
 		}
 
 		// Write the trace ID to the response
-		w.Write([]byte(traceID))
+		_, _ = w.Write([]byte(traceID))
 	})
 
 	// Create a middleware
