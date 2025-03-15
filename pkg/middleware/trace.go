@@ -48,3 +48,10 @@ func GetTraceIDFromContext(ctx context.Context) string {
 	}
 	return ""
 }
+
+// AddTraceIDToRequest adds a trace ID to the request context.
+// This is useful for testing or for manually setting a trace ID.
+func AddTraceIDToRequest(r *http.Request, traceID string) *http.Request {
+	ctx := context.WithValue(r.Context(), TraceIDKey, traceID)
+	return r.WithContext(ctx)
+}

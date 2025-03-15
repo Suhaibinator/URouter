@@ -1,0 +1,92 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+// TestTraceMiddleware tests that the TraceMiddleware adds a trace ID to the request context
+func TestTraceMiddleware(t *testing.T) {
+	// Create a handler that checks for the trace ID
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get the trace ID from the context
+		traceID := GetTraceID(r)
+
+		// Check that the trace ID is not empty
+		if traceID == "" {
+			t.Error("Expected trace ID to be set, but it was empty")
+		}
+
+		// Write the trace ID to the response
+		w.Write([]byte(traceID))
+	})
+
+	// Create a middleware
+	middleware := TraceMiddleware()
+
+	// Create a wrapped handler
+	wrappedHandler := middleware(handler)
+
+	// Create a request
+	req, err := http.NewRequest("GET", "/test", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+
+	// Create a response recorder
+	rr := httptest.NewRecorder()
+
+	// Serve the request
+	wrappedHandler.ServeHTTP(rr, req)
+
+	// Check that the response contains a trace ID (non-empty string)
+	if rr.Body.String() == "" {
+		t.Error("Expected response to contain a trace ID, but it was empty")
+	}
+}
+
+// TestGetTraceID tests that GetTraceID returns the trace ID from the request context
+func TestGetTraceID(t *testing.T) {
+	// Create a request
+	req, err := http.NewRequest("GET", "/test", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+
+	// Test with no trace ID
+	if traceID := GetTraceID(req); traceID != "" {
+		t.Errorf("Expected trace ID to be empty, got %q", traceID)
+	}
+
+	// Add a trace ID to the context
+	expectedTraceID := "test-trace-id"
+	ctx := context.WithValue(req.Context(), TraceIDKey, expectedTraceID)
+	req = req.WithContext(ctx)
+
+	// Test with trace ID
+	if traceID := GetTraceID(req); traceID != expectedTraceID {
+		t.Errorf("Expected trace ID to be %q, got %q", expectedTraceID, traceID)
+	}
+}
+
+// TestGetTraceIDFromContext tests that GetTraceIDFromContext returns the trace ID from the context
+func TestGetTraceIDFromContext(t *testing.T) {
+	// Create a context
+	ctx := context.Background()
+
+	// Test with no trace ID
+	if traceID := GetTraceIDFromContext(ctx); traceID != "" {
+		t.Errorf("Expected trace ID to be empty, got %q", traceID)
+	}
+
+	// Add a trace ID to the context
+	expectedTraceID := "test-trace-id"
+	ctx = context.WithValue(ctx, TraceIDKey, expectedTraceID)
+
+	// Test with trace ID
+	if traceID := GetTraceIDFromContext(ctx); traceID != expectedTraceID {
+		t.Errorf("Expected trace ID to be %q, got %q", expectedTraceID, traceID)
+	}
+}
