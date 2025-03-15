@@ -21,6 +21,7 @@ SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 - **Graceful Shutdown**: Properly handle in-flight requests during shutdown
 - **Prometheus Integration**: Built-in support for Prometheus metrics
 - **Intelligent Logging**: Appropriate log levels for different types of events
+- **Trace ID Logging**: Automatically generate and include a unique trace ID for each request in all log entries
 
 ## Installation
 
@@ -33,6 +34,7 @@ go get github.com/Suhaibinator/SRouter
 - Go 1.24.0 or higher
 - [julienschmidt/httprouter](https://github.com/julienschmidt/httprouter) v1.3.0 or higher for high-performance routing
 - [go.uber.org/zap](https://github.com/uber-go/zap) v1.27.0 or higher for structured logging
+- [github.com/google/uuid](https://github.com/google/uuid) v1.6.0 or higher for trace ID generation
 - [github.com/prometheus/client_golang](https://github.com/prometheus/client_golang) v1.21.1 or higher for Prometheus metrics (optional)
 
 All dependencies are properly documented with Go modules and will be automatically installed when you run `go get github.com/Suhaibinator/SRouter`.
@@ -196,6 +198,82 @@ func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	// Return the user as JSON
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+```
+
+### Trace ID Logging
+
+SRouter provides built-in support for trace ID logging, which allows you to correlate log entries across different parts of your application for a single request. Each request is assigned a unique trace ID (UUID) that is automatically included in all log entries related to that request.
+
+#### Enabling Trace ID Logging
+
+To enable trace ID logging, add the `TraceMiddleware` to your router configuration:
+
+```go
+// Create a router with trace middleware
+routerConfig := router.RouterConfig{
+    Middlewares: []common.Middleware{
+        middleware.TraceMiddleware(), // Add this as the first middleware
+        // Other middleware...
+    },
+    // Other configuration...
+}
+
+r := router.NewRouter[string, User](config, authFunction, getUserIDFunction)
+```
+
+#### Accessing the Trace ID
+
+You can access the trace ID in your handlers and middleware:
+
+```go
+func myHandler(w http.ResponseWriter, r *http.Request) {
+    // Get the trace ID
+    traceID := middleware.GetTraceID(r)
+    
+    // Use the trace ID
+    fmt.Printf("Processing request with trace ID: %s\n", traceID)
+    
+    // ...
+}
+```
+
+#### Propagating the Trace ID to Downstream Services
+
+If your application calls other services, you can propagate the trace ID to maintain the request trace across service boundaries:
+
+```go
+func callDownstreamService(r *http.Request) {
+    // Get the trace ID
+    traceID := middleware.GetTraceID(r)
+    
+    // Create a new request to the downstream service
+    req, _ := http.NewRequest("GET", "https://api.example.com/data", nil)
+    
+    // Add the trace ID to the request headers
+    req.Header.Set("X-Trace-ID", traceID)
+    
+    // Make the request
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    
+    // ...
+}
+```
+
+#### Using the Trace ID in Context-Based Functions
+
+For functions that receive a context but not an HTTP request, you can extract the trace ID from the context:
+
+```go
+func processData(ctx context.Context) {
+    // Get the trace ID from the context
+    traceID := middleware.GetTraceIDFromContext(ctx)
+    
+    // Use the trace ID
+    log.Printf("[trace_id=%s] Processing data\n", traceID)
+    
+    // ...
 }
 ```
 
