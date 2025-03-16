@@ -30,6 +30,7 @@ type Router[T comparable, U any] struct {
 	wg                sync.WaitGroup
 	shutdown          bool
 	shutdownMu        sync.RWMutex
+	metricsWriterPool sync.Pool // Pool for reusing metricsResponseWriter objects
 }
 
 // contextKey is a type for context keys.
@@ -80,6 +81,11 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 		getUserIdFromUser: userIdFromuserFunction,
 		middlewares:       config.Middlewares,
 		rateLimiter:       rateLimiter,
+		metricsWriterPool: sync.Pool{
+			New: func() interface{} {
+				return &metricsResponseWriter[T, U]{}
+			},
+		},
 	}
 
 	// Add IP middleware as the first middleware (before any other middleware)
@@ -211,7 +217,7 @@ func (r *Router[T, U]) convertToHTTPRouterHandle(handler http.Handler) httproute
 // wrapHandler wraps a handler with all the necessary middleware.
 // It applies authentication, timeout, body size limits, rate limiting, and other middleware
 // to create a complete request processing pipeline.
-func (r *Router[T, U]) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, rateLimit *middleware.RateLimitConfig, middlewares []Middleware) http.Handler {
+func (r *Router[T, U]) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel, timeout time.Duration, maxBodySize int64, rateLimit *middleware.RateLimitConfig[T, U], middlewares []Middleware) http.Handler {
 	// Create a handler that applies all the router's functionality
 	h := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// First add to the wait group before checking shutdown status
@@ -284,35 +290,33 @@ func (r *Router[T, U]) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel
 		}
 	}))
 
-	// Apply authentication middleware based on the auth level
+	// Build the middleware chain
+	chain := common.NewMiddlewareChain()
+
+	// Add recovery middleware (always first in the chain)
+	chain = chain.Prepend(r.recoveryMiddleware)
+
+	// Add global middlewares
+	chain = chain.Append(r.middlewares...)
+
+	// Add route-specific middlewares
+	chain = chain.Append(middlewares...)
+
+	// Add rate limiting middleware if configured
+	if rateLimit != nil {
+		chain = chain.Append(middleware.RateLimit[T, U](rateLimit, r.rateLimiter, r.logger))
+	}
+
+	// Add authentication middleware based on the auth level
 	switch authLevel {
 	case AuthRequired:
-		h = r.authRequiredMiddleware(h)
+		chain = chain.Append(r.authRequiredMiddleware)
 	case AuthOptional:
-		h = r.authOptionalMiddleware(h)
-	case NoAuth:
-		// No authentication middleware needed
+		chain = chain.Append(r.authOptionalMiddleware)
 	}
 
-	// Apply rate limiting middleware if configured
-	if rateLimit != nil {
-		h = middleware.RateLimit(rateLimit, r.rateLimiter, r.logger)(h)
-	}
-
-	// Apply route-specific middlewares
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		h = middlewares[i](h)
-	}
-
-	// Apply global middlewares
-	for i := len(r.middlewares) - 1; i >= 0; i-- {
-		h = r.middlewares[i](h)
-	}
-
-	// Apply recovery middleware (always first in the chain)
-	h = r.recoveryMiddleware(h)
-
-	return h
+	// Apply the middleware chain to the handler
+	return chain.Then(h)
 }
 
 // ServeHTTP implements the http.Handler interface.
@@ -324,16 +328,20 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Apply metrics and tracing if enabled
 	if r.config.EnableMetrics || r.config.EnableTracing || r.config.PrometheusConfig != nil {
-		mrw := &metricsResponseWriter[T, U]{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK,
-			startTime:      time.Now(),
-			request:        req,
-			router:         r,
-		}
+		// Get a metricsResponseWriter from the pool
+		mrw := r.metricsWriterPool.Get().(*metricsResponseWriter[T, U])
+
+		// Initialize the writer with the current request data
+		mrw.ResponseWriter = w
+		mrw.statusCode = http.StatusOK
+		mrw.startTime = time.Now()
+		mrw.request = req
+		mrw.router = r
+		mrw.bytesWritten = 0
+
 		rw = mrw
 
-		// Defer logging and metrics collection
+		// Defer logging, metrics collection, and returning the writer to the pool
 		defer func() {
 			duration := time.Since(mrw.startTime)
 
@@ -431,6 +439,14 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				// Use Debug level for tracing to avoid log spam
 				r.logger.Debug("Request trace", fields...)
 			}
+
+			// Reset fields that might hold references to prevent memory leaks
+			mrw.ResponseWriter = nil
+			mrw.request = nil
+			mrw.router = nil
+
+			// Return the writer to the pool
+			r.metricsWriterPool.Put(mrw)
 		}()
 	} else {
 		// Use the original response writer if metrics and tracing are disabled
@@ -546,14 +562,33 @@ func (r *Router[T, U]) getEffectiveMaxBodySize(routeMaxBodySize, subRouterMaxBod
 
 // getEffectiveRateLimit returns the effective rate limit for a route.
 // It considers route-specific, sub-router, and global rate limit settings in that order of precedence.
-func (r *Router[T, U]) getEffectiveRateLimit(routeRateLimit, subRouterRateLimit *middleware.RateLimitConfig) *middleware.RateLimitConfig {
+func (r *Router[T, U]) getEffectiveRateLimit(routeRateLimit, subRouterRateLimit *middleware.RateLimitConfig[any, any]) *middleware.RateLimitConfig[T, U] {
+	// Convert the rate limit config to the correct type
+	convertConfig := func(config *middleware.RateLimitConfig[any, any]) *middleware.RateLimitConfig[T, U] {
+		if config == nil {
+			return nil
+		}
+
+		// Create a new config with the correct type parameters
+		return &middleware.RateLimitConfig[T, U]{
+			BucketName:      config.BucketName,
+			Limit:           config.Limit,
+			Window:          config.Window,
+			Strategy:        config.Strategy,
+			UserIDFromUser:  nil, // These will need to be set by the caller if needed
+			UserIDToString:  nil, // These will need to be set by the caller if needed
+			KeyExtractor:    config.KeyExtractor,
+			ExceededHandler: config.ExceededHandler,
+		}
+	}
+
 	if routeRateLimit != nil {
-		return routeRateLimit
+		return convertConfig(routeRateLimit)
 	}
 	if subRouterRateLimit != nil {
-		return subRouterRateLimit
+		return convertConfig(subRouterRateLimit)
 	}
-	return r.config.GlobalRateLimit
+	return convertConfig(r.config.GlobalRateLimit)
 }
 
 // handleError handles an error by logging it and returning an appropriate HTTP response.
