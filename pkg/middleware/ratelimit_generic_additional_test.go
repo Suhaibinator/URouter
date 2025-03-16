@@ -12,8 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// TestExtractUserGeneric tests the extractUserGeneric function with various scenarios
-func TestExtractUserGeneric(t *testing.T) {
+// TestExtractUser tests the extractUser function with various scenarios
+func TestExtractUser(t *testing.T) {
 
 	// Test case 1: User object in context with UserIDFromUser and UserIDToString
 	t.Run("with user object in context and both conversion functions", func(t *testing.T) {
@@ -25,7 +25,7 @@ func TestExtractUserGeneric(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		// Create a config with UserIDFromUser function
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			UserIDFromUser: func(u string) string {
 				return u
 			},
@@ -35,7 +35,7 @@ func TestExtractUserGeneric(t *testing.T) {
 		}
 
 		// Extract the user
-		userID := extractUserGeneric(req, config)
+		userID := extractUser(req, config)
 		if userID != "testUser" {
 			t.Errorf("Expected user ID 'testUser', got '%s'", userID)
 		}
@@ -51,14 +51,14 @@ func TestExtractUserGeneric(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		// Create a config with UserIDFromUser function but no UserIDToString
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			UserIDFromUser: func(u string) string {
 				return u + "-modified"
 			},
 		}
 
 		// Extract the user
-		userID := extractUserGeneric(req, config)
+		userID := extractUser(req, config)
 		if userID != "testUser-modified" {
 			t.Errorf("Expected user ID 'testUser-modified', got '%s'", userID)
 		}
@@ -74,14 +74,14 @@ func TestExtractUserGeneric(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		// Create a config with UserIDFromUser function returning int
-		config := &RateLimitConfigGeneric[int, string]{
+		config := &RateLimitConfig[int, string]{
 			UserIDFromUser: func(u string) int {
 				return 42
 			},
 		}
 
 		// Extract the user
-		userID := extractUserGeneric(req, config)
+		userID := extractUser(req, config)
 		if userID != "42" {
 			t.Errorf("Expected user ID '42', got '%s'", userID)
 		}
@@ -104,14 +104,14 @@ func TestExtractUserGeneric(t *testing.T) {
 		customID := CustomID{id: "custom-id"}
 
 		// Create a config with UserIDFromUser function returning CustomID
-		config := &RateLimitConfigGeneric[CustomID, string]{
+		config := &RateLimitConfig[CustomID, string]{
 			UserIDFromUser: func(u string) CustomID {
 				return customID
 			},
 		}
 
 		// Extract the user
-		userID := extractUserGeneric(req, config)
+		userID := extractUser(req, config)
 		// Since CustomID doesn't have a String method, it should use fmt.Sprint
 		if userID != fmt.Sprint(customID) {
 			t.Errorf("Expected user ID '%v', got '%s'", customID, userID)
@@ -127,14 +127,14 @@ func TestExtractUserGeneric(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		// Create a config with UserIDToString function
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			UserIDToString: func(id string) string {
 				return id + "-suffix"
 			},
 		}
 
 		// Extract the user
-		extractedID := extractUserGeneric(req, config)
+		extractedID := extractUser(req, config)
 		if extractedID != "user123-suffix" {
 			t.Errorf("Expected user ID 'user123-suffix', got '%s'", extractedID)
 		}
@@ -149,10 +149,10 @@ func TestExtractUserGeneric(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		// Create a config without UserIDToString function
-		config := &RateLimitConfigGeneric[string, string]{}
+		config := &RateLimitConfig[string, string]{}
 
 		// Extract the user
-		extractedID := extractUserGeneric(req, config)
+		extractedID := extractUser(req, config)
 		if extractedID != "user123" {
 			t.Errorf("Expected user ID 'user123', got '%s'", extractedID)
 		}
@@ -167,10 +167,10 @@ func TestExtractUserGeneric(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		// Create a config without UserIDToString function
-		config := &RateLimitConfigGeneric[int, string]{}
+		config := &RateLimitConfig[int, string]{}
 
 		// Extract the user
-		extractedID := extractUserGeneric(req, config)
+		extractedID := extractUser(req, config)
 		if extractedID != "42" {
 			t.Errorf("Expected user ID '42', got '%s'", extractedID)
 		}
@@ -185,10 +185,10 @@ func TestExtractUserGeneric(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		// Create a config without UserIDToString function
-		config := &RateLimitConfigGeneric[bool, string]{}
+		config := &RateLimitConfig[bool, string]{}
 
 		// Extract the user
-		extractedID := extractUserGeneric(req, config)
+		extractedID := extractUser(req, config)
 		if extractedID != "true" {
 			t.Errorf("Expected user ID 'true', got '%s'", extractedID)
 		}
@@ -200,18 +200,18 @@ func TestExtractUserGeneric(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 
 		// Create a config
-		config := &RateLimitConfigGeneric[string, string]{}
+		config := &RateLimitConfig[string, string]{}
 
 		// Extract the user
-		extractedID := extractUserGeneric(req, config)
+		extractedID := extractUser(req, config)
 		if extractedID != "" {
 			t.Errorf("Expected empty user ID, got '%s'", extractedID)
 		}
 	})
 }
 
-// TestRateLimitGeneric tests the RateLimitGeneric function with various scenarios
-func TestRateLimitGeneric(t *testing.T) {
+// TestRateLimit tests the RateLimit function with various scenarios
+func TestRateLimit(t *testing.T) {
 	// Create a test logger
 	logger := zap.NewNop()
 
@@ -229,7 +229,7 @@ func TestRateLimitGeneric(t *testing.T) {
 	// Test case 1: IP strategy
 	t.Run("with IP strategy", func(t *testing.T) {
 		// Create a config with IP strategy
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			BucketName: "bucket",
 			Limit:      10,
 			Window:     time.Duration(1000) * time.Millisecond,
@@ -237,7 +237,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		}
 
 		// Create the middleware
-		middleware := RateLimitGeneric(config, mockLimiter, logger)
+		middleware := RateLimit(config, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false
@@ -271,7 +271,7 @@ func TestRateLimitGeneric(t *testing.T) {
 	// Test case 2: User strategy with user ID in context
 	t.Run("with User strategy and user ID in context", func(t *testing.T) {
 		// Create a config with User strategy
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			BucketName: "bucket",
 			Limit:      10,
 			Window:     time.Duration(1000) * time.Millisecond,
@@ -282,7 +282,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		}
 
 		// Create the middleware
-		middleware := RateLimitGeneric(config, mockLimiter, logger)
+		middleware := RateLimit(config, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false
@@ -313,7 +313,7 @@ func TestRateLimitGeneric(t *testing.T) {
 	// Test case 3: User strategy with no user ID in context (falls back to IP)
 	t.Run("with User strategy and no user ID in context", func(t *testing.T) {
 		// Create a config with User strategy
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			BucketName: "bucket",
 			Limit:      10,
 			Window:     time.Duration(1000) * time.Millisecond,
@@ -321,7 +321,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		}
 
 		// Create the middleware
-		middleware := RateLimitGeneric(config, mockLimiter, logger)
+		middleware := RateLimit(config, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false
@@ -350,7 +350,7 @@ func TestRateLimitGeneric(t *testing.T) {
 	// Test case 4: Custom strategy with key extractor
 	t.Run("with Custom strategy and key extractor", func(t *testing.T) {
 		// Create a config with Custom strategy
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			BucketName: "bucket",
 			Limit:      10,
 			Window:     time.Duration(1000) * time.Millisecond,
@@ -361,7 +361,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		}
 
 		// Create the middleware
-		middleware := RateLimitGeneric(config, mockLimiter, logger)
+		middleware := RateLimit(config, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false
@@ -389,7 +389,7 @@ func TestRateLimitGeneric(t *testing.T) {
 	// Test case 5: Custom strategy without key extractor (falls back to IP)
 	t.Run("with Custom strategy and no key extractor", func(t *testing.T) {
 		// Create a config with Custom strategy but no key extractor
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			BucketName: "bucket",
 			Limit:      10,
 			Window:     time.Duration(1000) * time.Millisecond,
@@ -397,7 +397,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		}
 
 		// Create the middleware
-		middleware := RateLimitGeneric(config, mockLimiter, logger)
+		middleware := RateLimit(config, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false
@@ -426,7 +426,7 @@ func TestRateLimitGeneric(t *testing.T) {
 	// Test case 6: Rate limit exceeded
 	t.Run("with rate limit exceeded", func(t *testing.T) {
 		// Create a config that will trigger the rate limit
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			BucketName: "bucket",
 			Limit:      10,
 			Window:     time.Duration(1000) * time.Millisecond,
@@ -434,7 +434,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		}
 
 		// Create the middleware
-		middleware := RateLimitGeneric(config, mockLimiter, logger)
+		middleware := RateLimit(config, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false
@@ -481,7 +481,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		})
 
 		// Create a config that will trigger the rate limit
-		config := &RateLimitConfigGeneric[string, string]{
+		config := &RateLimitConfig[string, string]{
 			BucketName:      "bucket",
 			Limit:           10,
 			Window:          time.Duration(1000) * time.Millisecond,
@@ -490,7 +490,7 @@ func TestRateLimitGeneric(t *testing.T) {
 		}
 
 		// Create the middleware
-		middleware := RateLimitGeneric(config, mockLimiter, logger)
+		middleware := RateLimit(config, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false
@@ -534,7 +534,7 @@ func TestRateLimitGeneric(t *testing.T) {
 	// Test case 8: Nil config
 	t.Run("with nil config", func(t *testing.T) {
 		// Create the middleware with nil config
-		middleware := RateLimitGeneric[string, string](nil, mockLimiter, logger)
+		middleware := RateLimit[string, string](nil, mockLimiter, logger)
 
 		// Create a test handler
 		handlerCalled := false

@@ -171,7 +171,7 @@ func main() {
 				Path:    "/login",
 				Methods: []string{"POST"},
 				// Strict rate limit for auth endpoints (shared bucket)
-				RateLimit: &middleware.RateLimitConfig{
+				RateLimit: &middleware.RateLimitConfig[any, any]{
 					BucketName:      "auth-endpoints",
 					Limit:           5,
 					Window:          time.Minute,
@@ -191,7 +191,7 @@ func main() {
 				Path:    "/profile",
 				Methods: []string{"GET"},
 				// User-based rate limiting
-				RateLimit: &middleware.RateLimitConfig{
+				RateLimit: &middleware.RateLimitConfig[any, any]{
 					BucketName: "user-profile",
 					Limit:      10,
 					Window:     time.Minute,
@@ -206,7 +206,7 @@ func main() {
 				Path:    "/public",
 				Methods: []string{"GET"},
 				// IP-based rate limiting
-				RateLimit: &middleware.RateLimitConfig{
+				RateLimit: &middleware.RateLimitConfig[any, any]{
 					BucketName: "public-endpoints",
 					Limit:      20,
 					Window:     time.Minute,
@@ -221,7 +221,7 @@ func main() {
 	routerConfig := router.RouterConfig{
 		Logger: logger,
 		// Global rate limit (applies to all routes)
-		GlobalRateLimit: &middleware.RateLimitConfig{
+		GlobalRateLimit: &middleware.RateLimitConfig[any, any]{
 			BucketName: "global",
 			Limit:      100,
 			Window:     time.Minute,
