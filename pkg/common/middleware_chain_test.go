@@ -29,7 +29,7 @@ func TestMiddlewareChain(t *testing.T) {
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("X-Final", "final")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Wrap the final handler with the middleware chain
@@ -130,7 +130,7 @@ func TestEmptyMiddlewareChain(t *testing.T) {
 	// Create a final handler
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Wrap the final handler with the middleware chain

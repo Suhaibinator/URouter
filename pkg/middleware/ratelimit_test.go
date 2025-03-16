@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"context"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -85,20 +83,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 func TestRateLimitMiddlewareWithCustomHandler(t *testing.T) {
 	// Skip this test for now as it's causing timeouts
 	t.Skip("Skipping TestRateLimitMiddlewareWithCustomHandler as it's causing timeouts")
-}
-
-// testUserIDKey is a type for context keys to avoid collisions
-type testUserIDKey struct{}
-
-// setTestUserID sets the user ID in the context for testing
-func setTestUserID(ctx context.Context, userID string) context.Context {
-	return context.WithValue(ctx, testUserIDKey{}, userID)
-}
-
-// getTestUserID gets the user ID from the context for testing
-func getTestUserID(r *http.Request) (string, bool) {
-	userID, ok := r.Context().Value(testUserIDKey{}).(string)
-	return userID, ok
 }
 
 func TestRateLimitMiddlewareWithUserStrategy(t *testing.T) {
