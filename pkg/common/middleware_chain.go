@@ -33,3 +33,8 @@ func (c MiddlewareChain) Then(h http.Handler) http.Handler {
 	}
 	return h
 }
+
+// ThenFunc applies the middleware chain to a handler function
+func (c MiddlewareChain) ThenFunc(f http.HandlerFunc) http.Handler {
+	return c.Then(http.HandlerFunc(f))
+}
