@@ -30,7 +30,7 @@ func TestMiddlewareChainPrepend(t *testing.T) {
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("X-Final", "final")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Wrap the final handler with the middleware chain
@@ -93,7 +93,7 @@ func TestMiddlewareChainAppendAndPrepend(t *testing.T) {
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("X-Final", "final")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Wrap the final handler with the middleware chain
@@ -156,7 +156,7 @@ func TestMiddlewareChainThenFunc(t *testing.T) {
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("X-Final", "final")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}
 
 	// Wrap the handler function with the middleware chain
