@@ -1,187 +1,57 @@
 # Custom Metrics Example
 
-This example demonstrates how to use the enhanced metrics system (v2) in SRouter, including:
+This example demonstrates how to implement custom metrics collection in SRouter, showcasing several advanced patterns:
 
-1. Using the built-in Prometheus metrics system
-2. Implementing a custom metrics system
-3. Using the metrics abstraction layer to support multiple metric formats
+1. **External Metric Collectors**: Shows how to allow external systems to collect metrics, rather than only supporting direct Prometheus integration.
+
+2. **Dependency Injection for Metrics**: Demonstrates how to accept an external registry as a parameter instead of creating an internal one.
+
+3. **Middleware for Custom Metrics**: Provides middleware options that allow for custom metric collection without modifying core functionality.
+
+4. **Separation of Collection and Exposition**: Separates the collection of metrics from how they're exposed, allowing applications to decide how to expose metrics.
+
+5. **Support for Multiple Metric Formats**: Shows how to support different metric formats beyond Prometheus.
 
 ## Running the Example
 
-### Prometheus Metrics (Default)
-
-To run the example with Prometheus metrics:
+To run this example:
 
 ```bash
 go run .
 ```
 
-This will start a server on port 8080 with the following endpoints:
+Then visit:
+- http://localhost:8080/ to generate some metrics
+- http://localhost:8080/metrics to view the collected metrics
 
-- API: http://localhost:8080/api/users
-- Metrics: http://localhost:8080/metrics
+## Key Components
 
-### Custom Metrics
+### CustomMetricsRegistry
 
-To run the example with custom metrics:
+A simple metrics registry that allows for dependency injection of a Prometheus registry. This demonstrates how to accept an external registry rather than creating one internally.
 
-```bash
-go run . custom
-```
+### MetricsCollector Interface
 
-This will start a server on port 8081 with the following endpoints:
+An interface that abstracts the collection of metrics, allowing for different implementations. This demonstrates how to separate metrics collection from the core functionality.
 
-- API: http://localhost:8081/api/custom
-- Metrics: http://localhost:8081/metrics/custom
+### PrometheusMetricsCollector
 
-## Code Structure
-
-- `main.go`: Main entry point that runs either the Prometheus or custom metrics example
-- `custom_metrics.go`: Implementation of a custom metrics system
-- `custom_example.go`: Example of using the custom metrics system
-
-## Features Demonstrated
-
-### Fluent API for Creating Metrics
-
-```go
-counter := registry.NewCounter().
-    Name("http_requests_total").
-    Description("Total number of HTTP requests").
-    Tag("service", "api").
-    Build()
-```
-
-### Tags Support
-
-```go
-counter.WithTags(v2.Tags{
-    "method": "GET",
-    "path":   "/api/users",
-}).(v2.Counter).Inc()
-```
-
-### Separation of Collection and Exposition
-
-```go
-// Create a registry for collecting metrics
-registry := v2.NewPrometheusRegistry()
-
-// Create an exporter for exposing metrics
-exporter := v2.NewPrometheusExporter(registry)
-
-// Create a metrics handler
-metricsHandler := exporter.Handler()
-```
-
-### Middleware for Automatic Metrics Collection
-
-```go
-middleware := v2.NewPrometheusMiddleware(registry, v2.MetricsMiddlewareConfig{
-    EnableLatency:    true,
-    EnableThroughput: true,
-    EnableQPS:        true,
-    EnableErrors:     true,
-    DefaultTags: v2.Tags{
-        "environment": "production",
-        "version":     "1.0.0",
-    },
-})
-
-// Use the middleware
-mux.Handle("/", middleware.Handler("/", r))
-```
-
-### Custom Metrics Implementation
-
-The `custom_metrics.go` file demonstrates how to implement a custom metrics system that conforms to the v2 metrics interfaces. This allows you to:
-
-1. Use your own metrics collection system
-2. Support multiple metric formats
-3. Integrate with external monitoring systems
-
-## Metrics Interfaces
-
-The v2 metrics system is based on the following interfaces:
-
-### MetricsRegistry
-
-```go
-type MetricsRegistry interface {
-    // Register a metric with the registry
-    Register(metric Metric) error
-    
-    // Get a metric by name
-    Get(name string) (Metric, bool)
-    
-    // Unregister a metric from the registry
-    Unregister(name string) bool
-    
-    // Clear all metrics from the registry
-    Clear()
-    
-    // Get a snapshot of all metrics
-    Snapshot() MetricsSnapshot
-    
-    // Create a new registry with the given tags
-    WithTags(tags Tags) MetricsRegistry
-    
-    // Create a new counter builder
-    NewCounter() CounterBuilder
-    
-    // Create a new gauge builder
-    NewGauge() GaugeBuilder
-    
-    // Create a new histogram builder
-    NewHistogram() HistogramBuilder
-    
-    // Create a new summary builder
-    NewSummary() SummaryBuilder
-}
-```
-
-### MetricsExporter
-
-```go
-type MetricsExporter interface {
-    // Export metrics to the backend
-    Export(snapshot MetricsSnapshot) error
-    
-    // Start the exporter
-    Start() error
-    
-    // Stop the exporter
-    Stop() error
-    
-    // Return an HTTP handler for exposing metrics
-    Handler() http.Handler
-}
-```
+An implementation of the MetricsCollector interface that uses Prometheus. This shows one way to collect metrics, but other implementations could be created for different metric systems.
 
 ### MetricsMiddleware
 
-```go
-type MetricsMiddleware interface {
-    // Wrap an HTTP handler with metrics collection
-    Handler(name string, handler http.Handler) http.Handler
-    
-    // Configure the middleware
-    Configure(config MetricsMiddlewareConfig) MetricsMiddleware
-    
-    // Add a filter to the middleware
-    WithFilter(filter MetricsFilter) MetricsMiddleware
-    
-    // Add a sampler to the middleware
-    WithSampler(sampler MetricsSampler) MetricsMiddleware
-}
-```
+Middleware that uses a MetricsCollector to collect metrics for HTTP requests. This demonstrates how to provide middleware options for custom metric collection.
 
-## Benefits of the v2 Metrics System
+## Design Patterns
 
-1. **Fluent API**: More intuitive and chainable API for creating metrics
-2. **Tags Support**: First-class support for metric tags (labels)
-3. **Type Safety**: Strong typing for different metric types
-4. **Separation of Concerns**: Clear separation between collection and exposition
-5. **Extensibility**: Easy to extend with custom collectors and exporters
-6. **Dependency Injection**: Support for injecting external metric collectors
-7. **Multiple Formats**: Support for multiple metric formats
+This example demonstrates several important design patterns for metrics:
+
+1. **Dependency Injection**: The metrics registry and collector are injected into components that need them, rather than being created internally.
+
+2. **Interface Abstraction**: The MetricsCollector interface abstracts the collection of metrics, allowing for different implementations.
+
+3. **Middleware Pattern**: The MetricsMiddleware wraps HTTP handlers to collect metrics without modifying the core functionality.
+
+4. **Separation of Concerns**: The collection of metrics is separated from how they're exposed, allowing applications to decide how to expose metrics.
+
+These patterns make the metrics system more flexible and extensible, allowing for custom metric collection without modifying the core functionality.
