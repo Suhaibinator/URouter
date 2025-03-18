@@ -301,8 +301,5 @@ func NewRandomSampler(rate float64) *RandomSampler {
 
 // Sample returns true if the request should be sampled.
 func (s *RandomSampler) Sample() bool {
-	if s.rate >= 1.0 {
-		return true
-	}
-	return false
+	return s.rate >= 1.0
 }
