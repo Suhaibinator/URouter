@@ -19,7 +19,7 @@ SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 - **Rate Limiting**: Flexible rate limiting with support for IP-based, user-based, and custom strategies
 - **Path Parameters**: Easy access to path parameters via request context
 - **Graceful Shutdown**: Properly handle in-flight requests during shutdown
-- **Prometheus Integration**: Built-in support for Prometheus metrics
+- **Flexible Metrics System**: Support for multiple metric formats, custom collectors, and dependency injection
 - **Intelligent Logging**: Appropriate log levels for different types of events
 - **Trace ID Logging**: Automatically generate and include a unique trace ID for each request in all log entries
 
@@ -865,9 +865,13 @@ router.RegisterGenericRoute[CreateUserReq, CreateUserResp, string](r, router.Rou
 })
 ```
 
-### Prometheus Metrics
+### Metrics
 
-SRouter provides built-in support for Prometheus metrics:
+SRouter provides a flexible metrics system that supports multiple metric formats and allows for custom metric collectors, exporters, and middleware.
+
+#### Using Prometheus Metrics (Default)
+
+The simplest way to use metrics is with the built-in Prometheus support:
 
 ```go
 // Create a Prometheus registry
@@ -876,6 +880,7 @@ promRegistry := prometheus.NewRegistry()
 // Create a router configuration with Prometheus metrics enabled
 routerConfig := router.RouterConfig{
 	// ...
+	EnableMetrics: true,
 	PrometheusConfig: &router.PrometheusConfig{
 		Registry:         promRegistry,
 		Namespace:        "myapp",
@@ -905,6 +910,251 @@ http.ListenAndServe(":8080", mux)
 
 See the `examples/prometheus` directory for a complete example of Prometheus metrics.
 
+#### Using the Metrics Abstraction Layer (v1)
+
+SRouter provides a metrics abstraction layer that allows you to use different metric collectors, exporters, and middleware:
+
+```go
+// Create a Prometheus collector
+collector := metrics.DefaultPrometheusCollector("myapp", "api")
+
+// Create a Prometheus exporter
+exporter := metrics.DefaultPrometheusExporter()
+
+// Create a router configuration with metrics
+routerConfig := router.RouterConfig{
+	// ...
+	EnableMetrics: true,
+	MetricsConfig: &router.MetricsConfig{
+		Collector:  collector,
+		Exporter:   exporter,
+		Namespace:  "myapp",
+		Subsystem:  "api",
+		EnableLatency:    true,
+		EnableThroughput: true,
+		EnableQPS:        true,
+		EnableErrors:     true,
+	},
+	// ...
+}
+
+// Create a router
+r := router.NewRouter(routerConfig)
+
+// Create a metrics handler
+metricsHandler := exporter.Handler()
+
+// Create a mux to handle both the API and metrics endpoints
+mux := http.NewServeMux()
+mux.Handle("/metrics", metricsHandler)
+mux.Handle("/", r)
+
+// Start the server
+http.ListenAndServe(":8080", mux)
+```
+
+#### Using the Enhanced Metrics System (v2)
+
+SRouter now provides an enhanced metrics system (v2) with a more elegant and flexible approach to metrics collection and exposition:
+
+```go
+import (
+	"github.com/Suhaibinator/SRouter/pkg/metrics/v2"
+	"github.com/Suhaibinator/SRouter/pkg/router"
+)
+
+// Create a metrics registry
+registry := v2.NewPrometheusRegistry()
+
+// Create metrics with a fluent API
+counter := registry.NewCounter().
+	Name("http_requests_total").
+	Description("Total number of HTTP requests").
+	Tag("service", "api").
+	Build()
+
+gauge := registry.NewGauge().
+	Name("active_connections").
+	Description("Number of active connections").
+	Tag("service", "api").
+	Build()
+
+histogram := registry.NewHistogram().
+	Name("http_request_duration_seconds").
+	Description("HTTP request latency in seconds").
+	Buckets([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}).
+	Build()
+
+// Create a Prometheus exporter
+exporter := v2.NewPrometheusExporter(registry)
+
+// Create a router configuration with metrics
+routerConfig := router.RouterConfig{
+	// ...
+	EnableMetrics: true,
+	MetricsConfig: &router.MetricsConfig{
+		Collector:  registry,
+		Exporter:   exporter,
+		Namespace:  "myapp",
+		Subsystem:  "api",
+		EnableLatency:    true,
+		EnableThroughput: true,
+		EnableQPS:        true,
+		EnableErrors:     true,
+	},
+	// ...
+}
+
+// Create a router
+r := router.NewRouter(routerConfig)
+
+// Create a metrics handler
+metricsHandler := exporter.Handler()
+
+// Create a mux to handle both the API and metrics endpoints
+mux := http.NewServeMux()
+mux.Handle("/metrics", metricsHandler)
+mux.Handle("/", r)
+
+// Start the server
+http.ListenAndServe(":8080", mux)
+```
+
+The v2 metrics system provides several advantages:
+
+1. **Fluent API**: A more intuitive and chainable API for creating metrics
+2. **Tags Support**: First-class support for metric tags (labels)
+3. **Type Safety**: Strong typing for different metric types
+4. **Separation of Concerns**: Clear separation between collection and exposition
+5. **Extensibility**: Easy to extend with custom collectors and exporters
+
+#### Using External Metric Collectors
+
+You can use external metric collectors by implementing the appropriate interfaces:
+
+```go
+// Create a custom metrics collector
+customCollector := NewCustomMetricsCollector("myapp", "api")
+
+// Create a custom metrics exporter
+customExporter := NewCustomMetricsExporter(customCollector)
+
+// Create a custom metrics middleware factory
+customMiddlewareFactory := NewCustomMetricsMiddlewareFactory(customCollector)
+
+// Create a router configuration with custom metrics
+routerConfig := router.RouterConfig{
+	// ...
+	EnableMetrics: true,
+	MetricsConfig: &router.MetricsConfig{
+		Collector:         customCollector,
+		Exporter:          customExporter,
+		MiddlewareFactory: customMiddlewareFactory,
+		Namespace:         "myapp",
+		Subsystem:         "api",
+		EnableLatency:     true,
+		EnableThroughput:  true,
+		EnableQPS:         true,
+		EnableErrors:      true,
+	},
+	// ...
+}
+```
+
+#### Dependency Injection for Metrics Components
+
+You can inject your own metrics components:
+
+```go
+// Create a Prometheus registry
+registry := prometheus.NewRegistry()
+
+// Create a Prometheus collector with the registry
+collector := metrics.NewPrometheusCollector(registry, "myapp", "api")
+
+// Create a Prometheus exporter with the registry
+exporter := metrics.NewPrometheusExporter(registry)
+
+// Create a Prometheus middleware factory with the collector
+middlewareFactory := metrics.NewPrometheusMiddlewareFactory(
+	collector,
+	true,  // enableLatency
+	true,  // enableThroughput
+	true,  // enableQPS
+	true,  // enableErrors
+)
+
+// Create a router configuration with the metrics components
+routerConfig := router.RouterConfig{
+	// ...
+	EnableMetrics: true,
+	MetricsConfig: &router.MetricsConfig{
+		Collector:         collector,
+		Exporter:          exporter,
+		MiddlewareFactory: middlewareFactory,
+		Namespace:         "myapp",
+		Subsystem:         "api",
+	},
+	// ...
+}
+```
+
+#### Supporting Multiple Metric Formats
+
+You can support multiple metric formats by creating different exporters:
+
+```go
+// Create a Prometheus registry
+promRegistry := prometheus.NewRegistry()
+
+// Create a Prometheus collector
+prometheusCollector := metrics.NewPrometheusCollector(promRegistry, "myapp", "api")
+
+// Create a Prometheus exporter
+prometheusExporter := metrics.NewPrometheusExporter(promRegistry)
+
+// Create a custom metrics collector
+customCollector := NewCustomMetricsCollector("myapp", "api")
+
+// Create a custom metrics exporter
+customExporter := NewCustomMetricsExporter(customCollector)
+
+// Create a router configuration with Prometheus metrics
+routerConfig := router.RouterConfig{
+	// ...
+	EnableMetrics: true,
+	MetricsConfig: &router.MetricsConfig{
+		Collector:  prometheusCollector,
+		Exporter:   prometheusExporter,
+		Namespace:  "myapp",
+		Subsystem:  "api",
+		EnableLatency:    true,
+		EnableThroughput: true,
+		EnableQPS:        true,
+		EnableErrors:     true,
+	},
+	// ...
+}
+
+// Create a router
+r := router.NewRouter(routerConfig)
+
+// Create metrics handlers for both formats
+prometheusMetricsHandler := prometheusExporter.Handler()
+customMetricsHandler := customExporter.Handler()
+
+// Create a mux to handle both the API and metrics endpoints
+mux := http.NewServeMux()
+mux.Handle("/metrics/prometheus", prometheusMetricsHandler)
+mux.Handle("/metrics/custom", customMetricsHandler)
+mux.Handle("/", r)
+
+// Start the server
+http.ListenAndServe(":8080", mux)
+```
+
+See the `examples/custom-metrics` directory for a complete example of using the metrics abstraction layer with custom metrics.
+
 ## Examples
 
 SRouter includes several examples to help you get started:
@@ -917,6 +1167,7 @@ SRouter includes several examples to help you get started:
 - **examples/graceful-shutdown**: An example of graceful shutdown with SRouter
 - **examples/middleware**: An example of using middleware with SRouter
 - **examples/prometheus**: An example of using Prometheus metrics with SRouter
+- **examples/custom-metrics**: An example of using custom metrics with SRouter
 - **examples/rate-limiting**: An example of using rate limiting with SRouter
 - **examples/subrouters**: An example of using sub-routers with SRouter
 - **examples/trace-logging**: An example of using trace ID logging with SRouter
@@ -929,18 +1180,19 @@ Each example includes a complete, runnable application that demonstrates a speci
 
 ```go
 type RouterConfig struct {
-	Logger             *zap.Logger                 // Logger for all router operations
-	GlobalTimeout      time.Duration               // Default response timeout for all routes
-	GlobalMaxBodySize  int64                       // Default maximum request body size in bytes
-	GlobalRateLimit    *middleware.RateLimitConfig // Default rate limit for all routes
-	IPConfig           *middleware.IPConfig        // Configuration for client IP extraction
-	EnableMetrics      bool                        // Enable metrics collection
-	EnableTracing      bool                        // Enable distributed tracing
-	EnableTraceID      bool                        // Enable trace ID logging
-	PrometheusConfig   *router.PrometheusConfig    // Prometheus metrics configuration (optional)
-	SubRouters         []SubRouterConfig           // Sub-routers with their own configurations
-	Middlewares        []common.Middleware         // Global middlewares applied to all routes
-	AddUserObjectToCtx bool                        // Add user object to context
+	Logger             *zap.Logger                           // Logger for all router operations
+	GlobalTimeout      time.Duration                         // Default response timeout for all routes
+	GlobalMaxBodySize  int64                                 // Default maximum request body size in bytes
+	GlobalRateLimit    *middleware.RateLimitConfig[any, any] // Default rate limit for all routes
+	IPConfig           *middleware.IPConfig                  // Configuration for client IP extraction
+	EnableMetrics      bool                                  // Enable metrics collection
+	EnableTracing      bool                                  // Enable distributed tracing
+	EnableTraceID      bool                                  // Enable trace ID logging
+	PrometheusConfig   *PrometheusConfig                     // Prometheus metrics configuration (optional, deprecated)
+	MetricsConfig      *MetricsConfig                        // Metrics configuration (optional)
+	SubRouters         []SubRouterConfig                     // Sub-routers with their own configurations
+	Middlewares        []common.Middleware                   // Global middlewares applied to all routes
+	AddUserObjectToCtx bool                                  // Add user object to context
 }
 ```
 
@@ -958,16 +1210,52 @@ type PrometheusConfig struct {
 }
 ```
 
+### MetricsConfig
+
+```go
+type MetricsConfig struct {
+	// Collector is the metrics collector to use.
+	// If nil, a default collector will be used if metrics are enabled.
+	Collector interface{} // metrics.Collector
+
+	// Exporter is the metrics exporter to use.
+	// If nil, a default exporter will be used if metrics are enabled.
+	Exporter interface{} // metrics.Exporter
+
+	// MiddlewareFactory is the factory for creating metrics middleware.
+	// If nil, a default middleware factory will be used if metrics are enabled.
+	MiddlewareFactory interface{} // metrics.MiddlewareFactory
+
+	// Namespace for metrics.
+	Namespace string
+
+	// Subsystem for metrics.
+	Subsystem string
+
+	// EnableLatency enables latency metrics.
+	EnableLatency bool
+
+	// EnableThroughput enables throughput metrics.
+	EnableThroughput bool
+
+	// EnableQPS enables queries per second metrics.
+	EnableQPS bool
+
+	// EnableErrors enables error metrics.
+	EnableErrors bool
+}
+```
+
 ### SubRouterConfig
 
 ```go
 type SubRouterConfig struct {
-	PathPrefix          string                      // Common path prefix for all routes in this sub-router
-	TimeoutOverride     time.Duration               // Override global timeout for all routes in this sub-router
-	MaxBodySizeOverride int64                       // Override global max body size for all routes in this sub-router
-	RateLimitOverride   *middleware.RateLimitConfig // Override global rate limit for all routes in this sub-router
-	Routes              []RouteConfigBase           // Routes in this sub-router
-	Middlewares         []common.Middleware         // Middlewares applied to all routes in this sub-router
+	PathPrefix          string                                // Common path prefix for all routes in this sub-router
+	TimeoutOverride     time.Duration                         // Override global timeout for all routes in this sub-router
+	MaxBodySizeOverride int64                                 // Override global max body size for all routes in this sub-router
+	RateLimitOverride   *middleware.RateLimitConfig[any, any] // Override global rate limit for all routes in this sub-router
+	Routes              []RouteConfigBase                     // Routes in this sub-router
+	Middlewares         []common.Middleware                   // Middlewares applied to all routes in this sub-router
 }
 ```
 
@@ -975,14 +1263,14 @@ type SubRouterConfig struct {
 
 ```go
 type RouteConfigBase struct {
-	Path        string                      // Route path (will be prefixed with sub-router path prefix if applicable)
-	Methods     []string                    // HTTP methods this route handles
-	AuthLevel   AuthLevel                   // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
-	Timeout     time.Duration               // Override timeout for this specific route
-	MaxBodySize int64                       // Override max body size for this specific route
-	RateLimit   *middleware.RateLimitConfig // Rate limit for this specific route
-	Handler     http.HandlerFunc            // Standard HTTP handler function
-	Middlewares []common.Middleware         // Middlewares applied to this specific route
+	Path        string                                // Route path (will be prefixed with sub-router path prefix if applicable)
+	Methods     []string                              // HTTP methods this route handles
+	AuthLevel   AuthLevel                             // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
+	Timeout     time.Duration                         // Override timeout for this specific route
+	MaxBodySize int64                                 // Override max body size for this specific route
+	RateLimit   *middleware.RateLimitConfig[any, any] // Rate limit for this specific route
+	Handler     http.HandlerFunc                      // Standard HTTP handler function
+	Middlewares []common.Middleware                   // Middlewares applied to this specific route
 }
 ```
 
@@ -990,15 +1278,15 @@ type RouteConfigBase struct {
 
 ```go
 type RouteConfig[T any, U any] struct {
-	Path        string                      // Route path (will be prefixed with sub-router path prefix if applicable)
-	Methods     []string                    // HTTP methods this route handles
-	AuthLevel   AuthLevel                   // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
-	Timeout     time.Duration               // Override timeout for this specific route
-	MaxBodySize int64                       // Override max body size for this specific route
-	RateLimit   *middleware.RateLimitConfig // Rate limit for this specific route
-	Codec       Codec[T, U]                 // Codec for marshaling/unmarshaling request and response
-	Handler     GenericHandler[T, U]        // Generic handler function
-	Middlewares []common.Middleware         // Middlewares applied to this specific route
+	Path        string                                // Route path (will be prefixed with sub-router path prefix if applicable)
+	Methods     []string                              // HTTP methods this route handles
+	AuthLevel   AuthLevel                             // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
+	Timeout     time.Duration                         // Override timeout for this specific route
+	MaxBodySize int64                                 // Override max body size for this specific route
+	RateLimit   *middleware.RateLimitConfig[any, any] // Rate limit for this specific route
+	Codec       Codec[T, U]                           // Codec for marshaling/unmarshaling request and response
+	Handler     GenericHandler[T, U]                  // Generic handler function
+	Middlewares []common.Middleware                   // Middlewares applied to this specific route
 }
 ```
 
@@ -1169,7 +1457,9 @@ Chains multiple middlewares together:
 middleware.Chain(middlewares ...Middleware) Middleware
 ```
 
-### PrometheusMetrics
+### Metrics Middleware
+
+#### PrometheusMetrics (Deprecated)
 
 Adds Prometheus metrics collection:
 
@@ -1185,12 +1475,48 @@ middleware.PrometheusMetrics(
 ) Middleware
 ```
 
-### PrometheusHandler
+#### PrometheusHandler (Deprecated)
 
 Creates a handler for exposing Prometheus metrics:
 
 ```go
 middleware.PrometheusHandler(registry interface{}) http.Handler
+```
+
+#### Metrics Collector Interface
+
+```go
+type Collector interface {
+	// Counter creates or retrieves a counter metric.
+	Counter(name, help string, labelNames ...string) Counter
+
+	// Gauge creates or retrieves a gauge metric.
+	Gauge(name, help string, labelNames ...string) Gauge
+
+	// Histogram creates or retrieves a histogram metric.
+	Histogram(name, help string, buckets []float64, labelNames ...string) Histogram
+
+	// Summary creates or retrieves a summary metric.
+	Summary(name, help string, objectives map[float64]float64, maxAge, ageBuckets int, labelNames ...string) Summary
+}
+```
+
+#### Metrics Exporter Interface
+
+```go
+type Exporter interface {
+	// Handler returns an HTTP handler for exposing metrics.
+	Handler() http.Handler
+}
+```
+
+#### Metrics Middleware Factory Interface
+
+```go
+type MiddlewareFactory interface {
+	// CreateMiddleware creates a middleware for collecting metrics.
+	CreateMiddleware() func(http.Handler) http.Handler
+}
 ```
 
 ### TraceMiddleware

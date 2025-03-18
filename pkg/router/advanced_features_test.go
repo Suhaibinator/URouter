@@ -9,23 +9,28 @@ import (
 	"time"
 
 	"github.com/Suhaibinator/SRouter/pkg/codec"
-	"github.com/prometheus/client_golang/prometheus"
+	v2 "github.com/Suhaibinator/SRouter/pkg/metrics/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
 
-// TestPrometheusConfig tests that the Prometheus middleware is correctly added
-func TestPrometheusConfig(t *testing.T) {
+// TestMetricsConfig tests that the metrics middleware is correctly added
+func TestMetricsConfig(t *testing.T) {
 	// Skip the actual metric collection test since it requires a running Prometheus server
-	t.Skip("Skipping Prometheus test as it requires a running Prometheus server")
+	t.Skip("Skipping metrics test as it requires a running Prometheus server")
 
 	// Create a registry
-	registry := prometheus.NewRegistry()
+	registry := v2.NewPrometheusRegistry()
 
-	// Create a router with Prometheus config and string as both the user ID and user type
+	// Create an exporter
+	exporter := v2.NewPrometheusExporter(registry)
+
+	// Create a router with metrics config and string as both the user ID and user type
 	r := NewRouter(RouterConfig{
-		PrometheusConfig: &PrometheusConfig{
-			Registry:         registry,
+		EnableMetrics: true,
+		MetricsConfig: &MetricsConfig{
+			Collector:        registry,
+			Exporter:         exporter,
 			Namespace:        "test",
 			Subsystem:        "router",
 			EnableLatency:    true,
@@ -52,9 +57,9 @@ func TestPrometheusConfig(t *testing.T) {
 		},
 	})
 
-	// Verify the router was created successfully with Prometheus config
+	// Verify the router was created successfully with metrics config
 	if r == nil {
-		t.Errorf("Expected router to be created with Prometheus config")
+		t.Errorf("Expected router to be created with metrics config")
 	}
 }
 

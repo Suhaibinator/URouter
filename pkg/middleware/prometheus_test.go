@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func TestPrometheusHandler(t *testing.T) {
 
 	// Check that the content type is text/plain
 	contentType := rec.Header().Get("Content-Type")
-	if contentType != "text/plain" {
+	if !strings.HasPrefix(contentType, "text/plain") {
 		t.Errorf("Expected Content-Type 'text/plain', got '%s'", contentType)
 	}
 
