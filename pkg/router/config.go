@@ -32,16 +32,43 @@ const (
 	AuthRequired
 )
 
-// PrometheusConfig defines the configuration for Prometheus metrics.
-// It allows customization of how metrics are collected and labeled.
-type PrometheusConfig struct {
-	Registry         interface{} // Prometheus registry (prometheus.Registerer)
-	Namespace        string      // Namespace for metrics
-	Subsystem        string      // Subsystem for metrics
-	EnableLatency    bool        // Enable latency metrics
-	EnableThroughput bool        // Enable throughput metrics
-	EnableQPS        bool        // Enable queries per second metrics
-	EnableErrors     bool        // Enable error metrics
+// PrometheusConfig is removed in favor of MetricsConfig with v2 metrics system.
+// This type is kept for reference but should not be used.
+// Deprecated: Use MetricsConfig instead.
+type PrometheusConfig struct{}
+
+// MetricsConfig defines the configuration for metrics collection.
+// It allows customization of how metrics are collected and exposed.
+type MetricsConfig struct {
+	// Collector is the metrics collector to use.
+	// If nil, a default collector will be used if metrics are enabled.
+	Collector interface{} // metrics.Collector
+
+	// Exporter is the metrics exporter to use.
+	// If nil, a default exporter will be used if metrics are enabled.
+	Exporter interface{} // metrics.Exporter
+
+	// MiddlewareFactory is the factory for creating metrics middleware.
+	// If nil, a default middleware factory will be used if metrics are enabled.
+	MiddlewareFactory interface{} // metrics.MiddlewareFactory
+
+	// Namespace for metrics.
+	Namespace string
+
+	// Subsystem for metrics.
+	Subsystem string
+
+	// EnableLatency enables latency metrics.
+	EnableLatency bool
+
+	// EnableThroughput enables throughput metrics.
+	EnableThroughput bool
+
+	// EnableQPS enables queries per second metrics.
+	EnableQPS bool
+
+	// EnableErrors enables error metrics.
+	EnableErrors bool
 }
 
 // RouterConfig defines the global configuration for the router.
@@ -55,7 +82,8 @@ type RouterConfig struct {
 	EnableMetrics      bool                                  // Enable metrics collection
 	EnableTracing      bool                                  // Enable distributed tracing
 	EnableTraceID      bool                                  // Enable trace ID logging
-	PrometheusConfig   *PrometheusConfig                     // Prometheus metrics configuration (optional)
+	PrometheusConfig   *PrometheusConfig                     // Prometheus metrics configuration (optional, deprecated)
+	MetricsConfig      *MetricsConfig                        // Metrics configuration (optional)
 	SubRouters         []SubRouterConfig                     // Sub-routers with their own configurations
 	Middlewares        []common.Middleware                   // Global middlewares applied to all routes
 	AddUserObjectToCtx bool                                  // Add user object to context

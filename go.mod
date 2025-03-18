@@ -9,6 +9,8 @@ require (
 
 require github.com/google/uuid v1.6.0
 
+require github.com/klauspost/compress v1.17.11 // indirect
+
 require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

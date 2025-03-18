@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Suhaibinator/SRouter/pkg/common"
+	"github.com/Suhaibinator/SRouter/pkg/metrics"
 	"github.com/Suhaibinator/SRouter/pkg/middleware"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
@@ -96,18 +97,50 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 	}
 	r.middlewares = append([]common.Middleware{middleware.ClientIPMiddleware(ipConfig)}, r.middlewares...)
 
-	// Add Prometheus middleware if configured
-	if config.PrometheusConfig != nil {
-		prometheusMiddleware := middleware.PrometheusMetrics(
-			config.PrometheusConfig.Registry,
-			config.PrometheusConfig.Namespace,
-			config.PrometheusConfig.Subsystem,
-			config.PrometheusConfig.EnableLatency,
-			config.PrometheusConfig.EnableThroughput,
-			config.PrometheusConfig.EnableQPS,
-			config.PrometheusConfig.EnableErrors,
-		)
-		r.middlewares = append(r.middlewares, prometheusMiddleware)
+	// Add metrics middleware if configured
+	if config.EnableMetrics {
+		var metricsMiddleware common.Middleware
+
+		// Use the MetricsConfig
+		if config.MetricsConfig != nil {
+			// Check if the collector is a v2 registry
+			if registry, ok := config.MetricsConfig.Collector.(*metrics.PrometheusRegistry); ok {
+				// Create a middleware using the v2 registry
+				prometheusMiddleware := metrics.NewPrometheusMiddleware(registry, metrics.MetricsMiddlewareConfig{
+					EnableLatency:    config.MetricsConfig.EnableLatency,
+					EnableThroughput: config.MetricsConfig.EnableThroughput,
+					EnableQPS:        config.MetricsConfig.EnableQPS,
+					EnableErrors:     config.MetricsConfig.EnableErrors,
+					DefaultTags: metrics.Tags{
+						"service": config.MetricsConfig.Namespace,
+					},
+				})
+				// Create an adapter function that converts the middleware.Handler method to a common.Middleware
+				metricsMiddleware = func(next http.Handler) http.Handler {
+					return prometheusMiddleware.Handler("", next)
+				}
+			} else {
+				// Create a default v2 registry and middleware
+				registry := metrics.NewPrometheusRegistry()
+				prometheusMiddleware := metrics.NewPrometheusMiddleware(registry, metrics.MetricsMiddlewareConfig{
+					EnableLatency:    config.MetricsConfig.EnableLatency,
+					EnableThroughput: config.MetricsConfig.EnableThroughput,
+					EnableQPS:        config.MetricsConfig.EnableQPS,
+					EnableErrors:     config.MetricsConfig.EnableErrors,
+					DefaultTags: metrics.Tags{
+						"service": config.MetricsConfig.Namespace,
+					},
+				})
+				// Create an adapter function that converts the middleware.Handler method to a common.Middleware
+				metricsMiddleware = func(next http.Handler) http.Handler {
+					return prometheusMiddleware.Handler("", next)
+				}
+			}
+		}
+
+		if metricsMiddleware != nil {
+			r.middlewares = append(r.middlewares, metricsMiddleware)
+		}
 	}
 
 	// Register routes from sub-routers
@@ -327,7 +360,7 @@ func (r *Router[T, U]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var rw http.ResponseWriter
 
 	// Apply metrics and tracing if enabled
-	if r.config.EnableMetrics || r.config.EnableTracing || r.config.PrometheusConfig != nil {
+	if r.config.EnableMetrics || r.config.EnableTracing {
 		// Get a metricsResponseWriter from the pool
 		mrw := r.metricsWriterPool.Get().(*metricsResponseWriter[T, U])
 

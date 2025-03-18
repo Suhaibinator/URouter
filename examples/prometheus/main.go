@@ -7,32 +7,31 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Suhaibinator/SRouter/pkg/middleware"
+	"github.com/Suhaibinator/SRouter/pkg/metrics"
 	"github.com/Suhaibinator/SRouter/pkg/router"
 	"go.uber.org/zap"
 )
-
-// In a real application, you would use the prometheus client library
-// For this example, we'll just use a placeholder
-type PrometheusRegistry struct{}
 
 func main() {
 	// Create a logger
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	// Create a Prometheus registry
-	// In a real application, you would use prometheus.NewRegistry()
-	promRegistry := &PrometheusRegistry{}
+	// Create a v2 Prometheus registry
+	registry := metrics.NewPrometheusRegistry()
 
-	// Create a router configuration with Prometheus metrics enabled
+	// Create a v2 Prometheus exporter
+	exporter := metrics.NewPrometheusExporter(registry)
+
+	// Create a router configuration with v2 metrics enabled
 	routerConfig := router.RouterConfig{
 		Logger:            logger,
 		GlobalTimeout:     2 * time.Second,
 		GlobalMaxBodySize: 1 << 20, // 1 MB
 		EnableMetrics:     true,
-		PrometheusConfig: &router.PrometheusConfig{
-			Registry:         promRegistry,
+		MetricsConfig: &router.MetricsConfig{
+			Collector:        registry,
+			Exporter:         exporter,
 			Namespace:        "myapp",
 			Subsystem:        "api",
 			EnableLatency:    true,
@@ -83,7 +82,7 @@ func main() {
 	r := router.NewRouter[string, string](routerConfig, authFunction, userIdFromUserFunction)
 
 	// Create a metrics handler
-	metricsHandler := middleware.PrometheusHandler(promRegistry)
+	metricsHandler := exporter.Handler()
 
 	// Create a mux to handle both the API and metrics endpoints
 	mux := http.NewServeMux()

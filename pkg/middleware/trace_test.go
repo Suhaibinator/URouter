@@ -7,6 +7,29 @@ import (
 	"testing"
 )
 
+// TestAddTraceIDToRequest tests that AddTraceIDToRequest adds a trace ID to the request context
+func TestAddTraceIDToRequest(t *testing.T) {
+	// Create a request
+	req, err := http.NewRequest("GET", "/test", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+
+	// Verify no trace ID initially
+	if traceID := GetTraceID(req); traceID != "" {
+		t.Errorf("Expected trace ID to be empty initially, got %q", traceID)
+	}
+
+	// Add a trace ID to the request
+	expectedTraceID := "test-trace-id-123"
+	req = AddTraceIDToRequest(req, expectedTraceID)
+
+	// Verify the trace ID was added
+	if traceID := GetTraceID(req); traceID != expectedTraceID {
+		t.Errorf("Expected trace ID to be %q after adding, got %q", expectedTraceID, traceID)
+	}
+}
+
 // TestTraceMiddleware tests that the TraceMiddleware adds a trace ID to the request context
 func TestTraceMiddleware(t *testing.T) {
 	// Create a handler that checks for the trace ID
