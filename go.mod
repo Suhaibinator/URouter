@@ -9,7 +9,7 @@ require (
 
 require github.com/google/uuid v1.6.0
 
-require github.com/klauspost/compress v1.17.11 // indirect
+require github.com/klauspost/compress v1.18.0 // indirect
 
 require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
@@ -17,11 +17,11 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.62.0 // indirect
-	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/prometheus/common v0.63.0 // indirect
+	github.com/prometheus/procfs v0.16.0 // indirect
 	go.uber.org/ratelimit v0.3.1
-	golang.org/x/sys v0.28.0 // indirect
-	google.golang.org/protobuf v1.36.1
+	golang.org/x/sys v0.31.0 // indirect
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
