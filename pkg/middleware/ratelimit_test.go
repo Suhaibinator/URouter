@@ -13,8 +13,56 @@ import (
 )
 
 func TestUberRateLimiter(t *testing.T) {
-	// Skip this test for now as it's causing timeouts
-	t.Skip("Skipping TestUberRateLimiter as it's causing timeouts")
+	// Create a new UberRateLimiter
+	limiter := NewUberRateLimiter()
+
+	// Test parameters
+	key := "test-key"
+	limit := 3
+	window := 100 * time.Millisecond
+
+	// Test basic functionality
+	allowed, remaining, _ := limiter.Allow(key, limit, window)
+	if !allowed {
+		t.Errorf("Expected request to be allowed, but it was denied")
+	}
+	if remaining <= 0 {
+		t.Errorf("Expected remaining to be positive, got %d", remaining)
+	}
+
+	// Test that the limiter is reusing the same limiter for the same key
+	limiter.Allow(key, limit, window)
+	_, exists := limiter.limiters.Load(key)
+	if !exists {
+		t.Errorf("Expected limiter to be stored for key %s", key)
+	}
+
+	// Test with a different key
+	otherKey := "other-key"
+	allowed, remaining, _ = limiter.Allow(otherKey, limit, window)
+	if !allowed {
+		t.Errorf("Expected request with different key to be allowed, but it was denied")
+	}
+	if remaining <= 0 {
+		t.Errorf("Expected remaining to be positive, got %d", remaining)
+	}
+
+	// Test that the limiter is storing different limiters for different keys
+	_, exists = limiter.limiters.Load(otherKey)
+	if !exists {
+		t.Errorf("Expected limiter to be stored for key %s", otherKey)
+	}
+
+	// Test with different limit and window
+	differentLimit := 10
+	differentWindow := 500 * time.Millisecond
+	allowed, remaining, _ = limiter.Allow(key, differentLimit, differentWindow)
+	if !allowed {
+		t.Errorf("Expected request with different limit/window to be allowed, but it was denied")
+	}
+	if remaining <= 0 {
+		t.Errorf("Expected remaining to be positive, got %d", remaining)
+	}
 }
 
 func TestRateLimitExtractIP(t *testing.T) {
