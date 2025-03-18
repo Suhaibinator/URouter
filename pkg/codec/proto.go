@@ -17,6 +17,10 @@ func NewProtoCodec[T proto.Message, U proto.Message]() *ProtoCodec[T, U] {
 	return &ProtoCodec[T, U]{}
 }
 
+// For testing purposes, we expose these variables so they can be overridden in tests
+var protoUnmarshal = proto.Unmarshal
+var protoMarshal = proto.Marshal
+
 // Decode reads the request body and unmarshals into T (which is a pointer).
 func (c *ProtoCodec[T, U]) Decode(r *http.Request) (T, error) {
 	// T is, for example, *MyProto. The zero value is nil.
@@ -30,7 +34,7 @@ func (c *ProtoCodec[T, U]) Decode(r *http.Request) (T, error) {
 	}
 	defer r.Body.Close()
 
-	if err := proto.Unmarshal(body, msg); err != nil {
+	if err := protoUnmarshal(body, msg); err != nil {
 		var zero T
 		return zero, err
 	}
@@ -40,7 +44,7 @@ func (c *ProtoCodec[T, U]) Decode(r *http.Request) (T, error) {
 // Encode marshals U (also a pointer type) and writes to response.
 func (c *ProtoCodec[T, U]) Encode(w http.ResponseWriter, resp U) error {
 	w.Header().Set("Content-Type", "application/x-protobuf")
-	bytes, err := proto.Marshal(resp)
+	bytes, err := protoMarshal(resp)
 	if err != nil {
 		return err
 	}
