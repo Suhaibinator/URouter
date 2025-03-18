@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -81,6 +82,125 @@ func TestPrometheusRegistry(t *testing.T) {
 	if ok {
 		t.Fatal("Expected counter to be removed from registry")
 	}
+
+	// Test Clear method
+	_ = registry.NewCounter().
+		Name("test_counter2").
+		Description("Test counter 2").
+		Build()
+
+	_ = registry.NewGauge().
+		Name("test_gauge").
+		Description("Test gauge").
+		Build()
+
+	_ = registry.NewHistogram().
+		Name("test_histogram").
+		Description("Test histogram").
+		Buckets([]float64{1, 2, 3}).
+		Build()
+
+	_ = registry.NewSummary().
+		Name("test_summary").
+		Description("Test summary").
+		Objectives(map[float64]float64{0.5: 0.05}).
+		MaxAge(10 * time.Second).
+		AgeBuckets(5).
+		Build()
+
+	// Check that all metrics are in the registry
+	_, ok = registry.Get("test_counter2")
+	if !ok {
+		t.Fatal("Expected to find counter in registry")
+	}
+
+	_, ok = registry.Get("test_gauge")
+	if !ok {
+		t.Fatal("Expected to find gauge in registry")
+	}
+
+	_, ok = registry.Get("test_histogram")
+	if !ok {
+		t.Fatal("Expected to find histogram in registry")
+	}
+
+	_, ok = registry.Get("test_summary")
+	if !ok {
+		t.Fatal("Expected to find summary in registry")
+	}
+
+	// Clear the registry
+	registry.Clear()
+
+	// Check that all metrics are removed from the registry
+	_, ok = registry.Get("test_counter2")
+	if ok {
+		t.Fatal("Expected counter to be removed from registry")
+	}
+
+	_, ok = registry.Get("test_gauge")
+	if ok {
+		t.Fatal("Expected gauge to be removed from registry")
+	}
+
+	_, ok = registry.Get("test_histogram")
+	if ok {
+		t.Fatal("Expected histogram to be removed from registry")
+	}
+
+	_, ok = registry.Get("test_summary")
+	if ok {
+		t.Fatal("Expected summary to be removed from registry")
+	}
+
+	// Test WithTags method
+	taggedRegistry := registry.WithTags(Tags{"global": "tag"})
+	if taggedRegistry == nil {
+		t.Fatal("Expected tagged registry to not be nil")
+	}
+
+	// Create a counter with the tagged registry
+	counter = taggedRegistry.NewCounter().
+		Name("test_counter3").
+		Description("Test counter 3").
+		Tag("key", "value").
+		Build()
+
+	// Check that the counter has the expected tags
+	tags = counter.Tags()
+	if tags["global"] != "tag" {
+		t.Errorf("Expected counter tag \"global\" to be \"tag\", got %q", tags["global"])
+	}
+	if tags["key"] != "value" {
+		t.Errorf("Expected counter tag \"key\" to be \"value\", got %q", tags["key"])
+	}
+
+	// Test Snapshot method
+	snapshot := registry.Snapshot()
+	if snapshot == nil {
+		t.Fatal("Expected snapshot to not be nil")
+	}
+
+	// Check that the snapshot has the expected metrics
+	counters := snapshot.Counters()
+	if len(counters) != 1 {
+		t.Errorf("Expected 1 counter in snapshot, got %d", len(counters))
+	}
+
+	gauges := snapshot.Gauges()
+	if len(gauges) != 0 {
+		t.Errorf("Expected 0 gauges in snapshot, got %d", len(gauges))
+	}
+
+	histograms := snapshot.Histograms()
+	if len(histograms) != 0 {
+		t.Errorf("Expected 0 histograms in snapshot, got %d", len(histograms))
+	}
+
+	summaries := snapshot.Summaries()
+	if len(summaries) != 0 {
+		t.Errorf("Expected 0 summaries in snapshot, got %d", len(summaries))
+	}
 }
 
 // TestPrometheusExporter tests the PrometheusExporter
@@ -120,6 +240,24 @@ func TestPrometheusExporter(t *testing.T) {
 	contentType := rec.Header().Get("Content-Type")
 	if contentType != "text/plain; version=0.0.4; charset=utf-8; escaping=underscores" {
 		t.Errorf("Expected Content-Type %q, got %q", "text/plain; version=0.0.4; charset=utf-8; escaping=underscores", contentType)
+	}
+
+	// Test Export method
+	err := exporter.Export(registry.Snapshot())
+	if err != nil {
+		t.Errorf("Expected no error from Export, got %v", err)
+	}
+
+	// Test Start method
+	err = exporter.Start()
+	if err != nil {
+		t.Errorf("Expected no error from Start, got %v", err)
+	}
+
+	// Test Stop method
+	err = exporter.Stop()
+	if err != nil {
+		t.Errorf("Expected no error from Stop, got %v", err)
 	}
 }
 
@@ -221,6 +359,62 @@ func TestPrometheusMiddleware(t *testing.T) {
 
 	// Call the handler
 	sampledHandler.ServeHTTP(rec, req)
+
+	// Check that the response status code is 200
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Test with error response
+	errorHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, err := w.Write([]byte("Error"))
+		if err != nil {
+			t.Fatalf("Failed to write response: %v", err)
+		}
+	})
+
+	// Wrap the error handler with the middleware
+	errorMiddleware := middleware.Handler("error", errorHandler)
+
+	// Create a test request
+	req = httptest.NewRequest("GET", "/error", nil)
+	rec = httptest.NewRecorder()
+
+	// Call the handler
+	errorMiddleware.ServeHTTP(rec, req)
+
+	// Check that the response status code is 500
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status code %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+
+	// Test Configure method
+	configuredMiddleware := middleware.Configure(MetricsMiddlewareConfig{
+		EnableLatency:    false,
+		EnableThroughput: false,
+		EnableQPS:        false,
+		EnableErrors:     false,
+		SamplingRate:     0.5,
+		DefaultTags: Tags{
+			"new_key": "new_value",
+		},
+	})
+
+	// Check that the configured middleware is not nil
+	if configuredMiddleware == nil {
+		t.Fatal("Expected configured middleware to not be nil")
+	}
+
+	// Wrap the test handler with the configured middleware
+	configuredHandler := configuredMiddleware.Handler("test", testHandler)
+
+	// Create a test request
+	req = httptest.NewRequest("GET", "/test", nil)
+	rec = httptest.NewRecorder()
+
+	// Call the handler
+	configuredHandler.ServeHTTP(rec, req)
 
 	// Check that the response status code is 200
 	if rec.Code != http.StatusOK {
@@ -388,5 +582,271 @@ func TestPrometheusGauge(t *testing.T) {
 	value := prometheusGauge.Value()
 	if value != 0 {
 		t.Errorf("Expected gauge value to be 0, got %f", value)
+	}
+}
+
+// TestPrometheusHistogram tests the PrometheusHistogram
+func TestPrometheusHistogram(t *testing.T) {
+	// Create a new histogram
+	histogram := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "test_histogram",
+		Help:    "Test histogram",
+		Buckets: []float64{1, 2, 3},
+	})
+
+	// Create a new PrometheusHistogram
+	prometheusHistogram := &PrometheusHistogram{
+		name:        "test_histogram",
+		description: "Test histogram",
+		tags:        Tags{"key": "value"},
+		buckets:     []float64{1, 2, 3},
+		histogram:   histogram,
+	}
+
+	// Check that the histogram has the expected name
+	if prometheusHistogram.Name() != "test_histogram" {
+		t.Errorf("Expected histogram name to be \"test_histogram\", got %q", prometheusHistogram.Name())
+	}
+
+	// Check that the histogram has the expected description
+	if prometheusHistogram.Description() != "Test histogram" {
+		t.Errorf("Expected histogram description to be \"Test histogram\", got %q", prometheusHistogram.Description())
+	}
+
+	// Check that the histogram has the expected type
+	if prometheusHistogram.Type() != HistogramType {
+		t.Errorf("Expected histogram type to be %q, got %q", HistogramType, prometheusHistogram.Type())
+	}
+
+	// Check that the histogram has the expected tags
+	tags := prometheusHistogram.Tags()
+	if tags["key"] != "value" {
+		t.Errorf("Expected histogram tag \"key\" to be \"value\", got %q", tags["key"])
+	}
+
+	// Check that the histogram has the expected buckets
+	buckets := prometheusHistogram.Buckets()
+	if len(buckets) != 3 {
+		t.Errorf("Expected 3 buckets, got %d", len(buckets))
+	}
+	if buckets[0] != 1 {
+		t.Errorf("Expected bucket 0 to be 1, got %f", buckets[0])
+	}
+	if buckets[1] != 2 {
+		t.Errorf("Expected bucket 1 to be 2, got %f", buckets[1])
+	}
+	if buckets[2] != 3 {
+		t.Errorf("Expected bucket 2 to be 3, got %f", buckets[2])
+	}
+
+	// Create a new histogram with tags
+	taggedHistogram := prometheusHistogram.WithTags(Tags{"new_key": "new_value"})
+
+	// Check that the tagged histogram is not nil
+	if taggedHistogram == nil {
+		t.Fatal("Expected tagged histogram to not be nil")
+	}
+
+	// Check that the tagged histogram has the expected tags
+	taggedTags := taggedHistogram.Tags()
+	if taggedTags["key"] != "value" {
+		t.Errorf("Expected tagged histogram tag \"key\" to be \"value\", got %q", taggedTags["key"])
+	}
+	if taggedTags["new_key"] != "new_value" {
+		t.Errorf("Expected tagged histogram tag \"new_key\" to be \"new_value\", got %q", taggedTags["new_key"])
+	}
+
+	// Observe a value
+	prometheusHistogram.Observe(1.5)
+}
+
+// TestPrometheusSummary tests the PrometheusSummary
+func TestPrometheusSummary(t *testing.T) {
+	// Create a new summary
+	summary := prometheus.NewSummary(prometheus.SummaryOpts{
+		Name:       "test_summary",
+		Help:       "Test summary",
+		Objectives: map[float64]float64{0.5: 0.05},
+	})
+
+	// Create a new PrometheusSummary
+	prometheusSummary := &PrometheusSummary{
+		name:        "test_summary",
+		description: "Test summary",
+		tags:        Tags{"key": "value"},
+		objectives:  map[float64]float64{0.5: 0.05},
+		summary:     summary,
+	}
+
+	// Check that the summary has the expected name
+	if prometheusSummary.Name() != "test_summary" {
+		t.Errorf("Expected summary name to be \"test_summary\", got %q", prometheusSummary.Name())
+	}
+
+	// Check that the summary has the expected description
+	if prometheusSummary.Description() != "Test summary" {
+		t.Errorf("Expected summary description to be \"Test summary\", got %q", prometheusSummary.Description())
+	}
+
+	// Check that the summary has the expected type
+	if prometheusSummary.Type() != SummaryType {
+		t.Errorf("Expected summary type to be %q, got %q", SummaryType, prometheusSummary.Type())
+	}
+
+	// Check that the summary has the expected tags
+	tags := prometheusSummary.Tags()
+	if tags["key"] != "value" {
+		t.Errorf("Expected summary tag \"key\" to be \"value\", got %q", tags["key"])
+	}
+
+	// Check that the summary has the expected objectives
+	objectives := prometheusSummary.Objectives()
+	if len(objectives) != 1 {
+		t.Errorf("Expected 1 objective, got %d", len(objectives))
+	}
+	if objectives[0.5] != 0.05 {
+		t.Errorf("Expected objective 0.5 to be 0.05, got %f", objectives[0.5])
+	}
+
+	// Create a new summary with tags
+	taggedSummary := prometheusSummary.WithTags(Tags{"new_key": "new_value"})
+
+	// Check that the tagged summary is not nil
+	if taggedSummary == nil {
+		t.Fatal("Expected tagged summary to not be nil")
+	}
+
+	// Check that the tagged summary has the expected tags
+	taggedTags := taggedSummary.Tags()
+	if taggedTags["key"] != "value" {
+		t.Errorf("Expected tagged summary tag \"key\" to be \"value\", got %q", taggedTags["key"])
+	}
+	if taggedTags["new_key"] != "new_value" {
+		t.Errorf("Expected tagged summary tag \"new_key\" to be \"new_value\", got %q", taggedTags["new_key"])
+	}
+
+	// Observe a value
+	prometheusSummary.Observe(1.5)
+}
+
+// TestPrometheusGaugeBuilder tests the PrometheusGaugeBuilder
+func TestPrometheusGaugeBuilder(t *testing.T) {
+	// Create a new registry
+	registry := NewPrometheusRegistry()
+
+	// Create a gauge builder
+	builder := registry.NewGauge()
+
+	// Check that the builder is not nil
+	if builder == nil {
+		t.Fatal("Expected builder to not be nil")
+	}
+
+	// Set the name
+	builder = builder.Name("test_gauge")
+
+	// Set the description
+	builder = builder.Description("Test gauge")
+
+	// Add a tag
+	builder = builder.Tag("key", "value")
+
+	// Build the gauge
+	gauge := builder.Build()
+
+	// Check that the gauge is not nil
+	if gauge == nil {
+		t.Fatal("Expected gauge to not be nil")
+	}
+
+	// Check that the gauge has the expected name
+	if gauge.Name() != "test_gauge" {
+		t.Errorf("Expected gauge name to be \"test_gauge\", got %q", gauge.Name())
+	}
+
+	// Check that the gauge has the expected description
+	if gauge.Description() != "Test gauge" {
+		t.Errorf("Expected gauge description to be \"Test gauge\", got %q", gauge.Description())
+	}
+
+	// Check that the gauge has the expected type
+	if gauge.Type() != GaugeType {
+		t.Errorf("Expected gauge type to be %q, got %q", GaugeType, gauge.Type())
+	}
+
+	// Check that the gauge has the expected tags
+	tags := gauge.Tags()
+	if tags["key"] != "value" {
+		t.Errorf("Expected gauge tag \"key\" to be \"value\", got %q", tags["key"])
+	}
+}
+
+// TestPrometheusHistogramBuilder tests the PrometheusHistogramBuilder
+func TestPrometheusHistogramBuilder(t *testing.T) {
+	// Create a new registry
+	registry := NewPrometheusRegistry()
+
+	// Create a histogram builder
+	builder := registry.NewHistogram()
+
+	// Check that the builder is not nil
+	if builder == nil {
+		t.Fatal("Expected builder to not be nil")
+	}
+
+	// Set the name
+	builder = builder.Name("test_histogram")
+
+	// Set the description
+	builder = builder.Description("Test histogram")
+
+	// Add a tag
+	builder = builder.Tag("key", "value")
+
+	// Set the buckets
+	builder = builder.Buckets([]float64{1, 2, 3})
+
+	// Build the histogram
+	histogram := builder.Build()
+
+	// Check that the histogram is not nil
+	if histogram == nil {
+		t.Fatal("Expected histogram to not be nil")
+	}
+
+	// Check that the histogram has the expected name
+	if histogram.Name() != "test_histogram" {
+		t.Errorf("Expected histogram name to be \"test_histogram\", got %q", histogram.Name())
+	}
+
+	// Check that the histogram has the expected description
+	if histogram.Description() != "Test histogram" {
+		t.Errorf("Expected histogram description to be \"Test histogram\", got %q", histogram.Description())
+	}
+
+	// Check that the histogram has the expected type
+	if histogram.Type() != HistogramType {
+		t.Errorf("Expected histogram type to be %q, got %q", HistogramType, histogram.Type())
+	}
+
+	// Check that the histogram has the expected tags
+	tags := histogram.Tags()
+	if tags["key"] != "value" {
+		t.Errorf("Expected histogram tag \"key\" to be \"value\", got %q", tags["key"])
+	}
+
+	// Check that the histogram has the expected buckets
+	buckets := histogram.Buckets()
+	if len(buckets) != 3 {
+		t.Errorf("Expected 3 buckets, got %d", len(buckets))
+	}
+	if buckets[0] != 1 {
+		t.Errorf("Expected bucket 0 to be 1, got %f", buckets[0])
+	}
+	if buckets[1] != 2 {
+		t.Errorf("Expected bucket 1 to be 2, got %f", buckets[1])
+	}
+	if buckets[2] != 3 {
+		t.Errorf("Expected bucket 2 to be 3, got %f", buckets[2])
 	}
 }
