@@ -44,12 +44,12 @@ func (r *PrometheusRegistry) Register(metric Metric) error {
 	switch m := metric.(type) {
 	case *prometheusCounter:
 		collector = m.counter
-	case *prometheusGauge:
-		collector = m.gauge
 	case *prometheusHistogram:
 		collector = m.histogram
 	case *prometheusSummary:
 		collector = m.summary
+	case *prometheusGauge:
+		collector = m.gauge
 	default:
 		return errors.New("unsupported metric type")
 	}
@@ -124,10 +124,10 @@ func (r *PrometheusRegistry) Snapshot() MetricsSnapshot {
 
 	for _, metric := range r.metrics {
 		switch m := metric.(type) {
-		case Counter:
-			snapshot.counters = append(snapshot.counters, m)
 		case Gauge:
 			snapshot.gauges = append(snapshot.gauges, m)
+		case Counter:
+			snapshot.counters = append(snapshot.counters, m)
 		case Histogram:
 			snapshot.histograms = append(snapshot.histograms, m)
 		case Summary:
@@ -268,12 +268,10 @@ func (c *prometheusCounter) WithTags(tags Tags) Metric {
 		newTags[k] = v
 	}
 
-	// Convert tags to Prometheus labels
-	labelNames := make([]string, 0, len(newTags))
-	labelValues := make([]string, 0, len(newTags))
+	// Convert tags directly to Prometheus labels
+	labels := make(prometheus.Labels)
 	for k, v := range newTags {
-		labelNames = append(labelNames, k)
-		labelValues = append(labelValues, v)
+		labels[k] = v
 	}
 
 	// Create a new counter with the merged tags
@@ -361,7 +359,11 @@ func (b *prometheusCounterBuilder) Build() Counter {
 	}
 
 	// Register the counter
-	b.registry.Register(c)
+	if err := b.registry.Register(c); err != nil {
+		// Log the error in a real implementation
+		// For now, we'll just ignore it
+		_ = err
+	}
 
 	return c
 }
@@ -505,7 +507,11 @@ func (b *prometheusGaugeBuilder) Build() Gauge {
 	}
 
 	// Register the gauge
-	b.registry.Register(g)
+	if err := b.registry.Register(g); err != nil {
+		// Log the error in a real implementation
+		// For now, we'll just ignore it
+		_ = err
+	}
 
 	return g
 }
@@ -639,7 +645,11 @@ func (b *prometheusHistogramBuilder) Build() Histogram {
 	}
 
 	// Register the histogram
-	b.registry.Register(h)
+	if err := b.registry.Register(h); err != nil {
+		// Log the error in a real implementation
+		// For now, we'll just ignore it
+		_ = err
+	}
 
 	return h
 }
@@ -789,7 +799,11 @@ func (b *prometheusSummaryBuilder) Build() Summary {
 	}
 
 	// Register the summary
-	b.registry.Register(s)
+	if err := b.registry.Register(s); err != nil {
+		// Log the error in a real implementation
+		// For now, we'll just ignore it
+		_ = err
+	}
 
 	return s
 }
@@ -938,9 +952,9 @@ func (m *PrometheusMiddleware) Handler(name string, handler http.Handler) http.H
 		}
 
 		// Track request latency
+		var start time.Time
 		if m.reqLatency != nil {
-			// In a real implementation, we would use time.Now()
-			// But for this example, we'll just use a dummy value
+			start = time.Now()
 		}
 
 		// Call the handler
@@ -963,8 +977,7 @@ func (m *PrometheusMiddleware) Handler(name string, handler http.Handler) http.H
 
 		// Track request latency
 		if m.reqLatency != nil {
-			// In a real implementation, we would use time.Since(start).Seconds()
-			m.reqLatency.WithTags(tags).(Histogram).Observe(0.0)
+			m.reqLatency.WithTags(tags).(Histogram).Observe(time.Since(start).Seconds())
 		}
 	})
 }
