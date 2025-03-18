@@ -4,7 +4,7 @@ package middleware
 import (
 	"net/http"
 
-	v2 "github.com/Suhaibinator/SRouter/pkg/metrics/v2"
+	"github.com/Suhaibinator/SRouter/pkg/metrics"
 )
 
 // PrometheusMetrics is a middleware that collects Prometheus metrics for HTTP requests.
@@ -15,15 +15,15 @@ func PrometheusMetrics(registry interface{}, namespace, subsystem string, enable
 	_ = registry
 
 	// Create a v2 registry
-	v2Registry := v2.NewPrometheusRegistry()
+	v2Registry := metrics.NewPrometheusRegistry()
 
 	// Create a middleware
-	middleware := v2.NewPrometheusMiddleware(v2Registry, v2.MetricsMiddlewareConfig{
+	middleware := metrics.NewPrometheusMiddleware(v2Registry, metrics.MetricsMiddlewareConfig{
 		EnableLatency:    enableLatency,
 		EnableThroughput: enableThroughput,
 		EnableQPS:        enableQPS,
 		EnableErrors:     enableErrors,
-		DefaultTags: v2.Tags{
+		DefaultTags: metrics.Tags{
 			"namespace": namespace,
 			"subsystem": subsystem,
 		},
@@ -57,10 +57,10 @@ func PrometheusHandler(registry interface{}) http.Handler {
 	_ = registry
 
 	// Create a v2 registry
-	v2Registry := v2.NewPrometheusRegistry()
+	v2Registry := metrics.NewPrometheusRegistry()
 
 	// Create an exporter
-	exporter := v2.NewPrometheusExporter(v2Registry)
+	exporter := metrics.NewPrometheusExporter(v2Registry)
 
 	// Return the handler
 	return exporter.Handler()

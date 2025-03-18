@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	v2 "github.com/Suhaibinator/SRouter/pkg/metrics/v2"
+	"github.com/Suhaibinator/SRouter/pkg/metrics"
 	"github.com/Suhaibinator/SRouter/pkg/router"
 	"go.uber.org/zap"
 )
@@ -18,10 +18,10 @@ func main() {
 	defer logger.Sync()
 
 	// Create a v2 Prometheus registry
-	registry := v2.NewPrometheusRegistry()
+	registry := metrics.NewPrometheusRegistry()
 
 	// Create a v2 Prometheus exporter
-	exporter := v2.NewPrometheusExporter(registry)
+	exporter := metrics.NewPrometheusExporter(registry)
 
 	// Create a router configuration with v2 metrics enabled
 	routerConfig := router.RouterConfig{

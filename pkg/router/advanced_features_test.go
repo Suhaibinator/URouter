@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Suhaibinator/SRouter/pkg/codec"
-	v2 "github.com/Suhaibinator/SRouter/pkg/metrics/v2"
+	"github.com/Suhaibinator/SRouter/pkg/metrics"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -20,10 +20,10 @@ func TestMetricsConfig(t *testing.T) {
 	t.Skip("Skipping metrics test as it requires a running Prometheus server")
 
 	// Create a registry
-	registry := v2.NewPrometheusRegistry()
+	registry := metrics.NewPrometheusRegistry()
 
 	// Create an exporter
-	exporter := v2.NewPrometheusExporter(registry)
+	exporter := metrics.NewPrometheusExporter(registry)
 
 	// Create a router with metrics config and string as both the user ID and user type
 	r := NewRouter(RouterConfig{

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/Suhaibinator/SRouter/pkg/common"
-	v2 "github.com/Suhaibinator/SRouter/pkg/metrics/v2"
+	"github.com/Suhaibinator/SRouter/pkg/metrics"
 	"github.com/Suhaibinator/SRouter/pkg/middleware"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
@@ -104,14 +104,14 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 		// Use the MetricsConfig
 		if config.MetricsConfig != nil {
 			// Check if the collector is a v2 registry
-			if registry, ok := config.MetricsConfig.Collector.(*v2.PrometheusRegistry); ok {
+			if registry, ok := config.MetricsConfig.Collector.(*metrics.PrometheusRegistry); ok {
 				// Create a middleware using the v2 registry
-				prometheusMiddleware := v2.NewPrometheusMiddleware(registry, v2.MetricsMiddlewareConfig{
+				prometheusMiddleware := metrics.NewPrometheusMiddleware(registry, metrics.MetricsMiddlewareConfig{
 					EnableLatency:    config.MetricsConfig.EnableLatency,
 					EnableThroughput: config.MetricsConfig.EnableThroughput,
 					EnableQPS:        config.MetricsConfig.EnableQPS,
 					EnableErrors:     config.MetricsConfig.EnableErrors,
-					DefaultTags: v2.Tags{
+					DefaultTags: metrics.Tags{
 						"service": config.MetricsConfig.Namespace,
 					},
 				})
@@ -121,13 +121,13 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 				}
 			} else {
 				// Create a default v2 registry and middleware
-				registry := v2.NewPrometheusRegistry()
-				prometheusMiddleware := v2.NewPrometheusMiddleware(registry, v2.MetricsMiddlewareConfig{
+				registry := metrics.NewPrometheusRegistry()
+				prometheusMiddleware := metrics.NewPrometheusMiddleware(registry, metrics.MetricsMiddlewareConfig{
 					EnableLatency:    config.MetricsConfig.EnableLatency,
 					EnableThroughput: config.MetricsConfig.EnableThroughput,
 					EnableQPS:        config.MetricsConfig.EnableQPS,
 					EnableErrors:     config.MetricsConfig.EnableErrors,
-					DefaultTags: v2.Tags{
+					DefaultTags: metrics.Tags{
 						"service": config.MetricsConfig.Namespace,
 					},
 				})
