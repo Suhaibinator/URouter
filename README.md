@@ -22,6 +22,7 @@ SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 - **Flexible Metrics System**: Support for multiple metric formats, custom collectors, and dependency injection
 - **Intelligent Logging**: Appropriate log levels for different types of events
 - **Trace ID Logging**: Automatically generate and include a unique trace ID for each request in all log entries
+- **Flexible Request Data Sources**: Support for retrieving request data from various sources including request body, query parameters, and path parameters with automatic decoding
 
 ## Installation
 
@@ -808,6 +809,190 @@ routerConfig := router.RouterConfig{
 
 See the `examples/middleware` directory for examples of custom middleware.
 
+### Source Types
+
+SRouter provides flexible ways to retrieve and decode request data beyond just the request body. This is particularly useful for scenarios where you need to pass data in URLs or when working with clients that have limitations on request body usage.
+
+#### Available Source Types
+
+SRouter supports the following source types:
+
+1. **Body** (default): Retrieves data from the request body.
+   ```go
+   router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+       // ...
+       // SourceType defaults to Body if not specified
+   })
+   ```
+
+2. **Base64QueryParameter**: Retrieves data from a base64-encoded query parameter.
+   ```go
+   router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+       // ...
+       SourceType: router.Base64QueryParameter,
+       SourceKey:  "data", // Will look for ?data=base64encodedstring
+   })
+   ```
+
+3. **Base62QueryParameter**: Retrieves data from a base62-encoded query parameter.
+   ```go
+   router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+       // ...
+       SourceType: router.Base62QueryParameter,
+       SourceKey:  "data", // Will look for ?data=base62encodedstring
+   })
+   ```
+
+4. **Base64PathParameter**: Retrieves data from a base64-encoded path parameter.
+   ```go
+   router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+       Path:       "/users/:data",
+       // ...
+       SourceType: router.Base64PathParameter,
+       SourceKey:  "data", // Will use the :data path parameter
+   })
+   ```
+
+5. **Base62PathParameter**: Retrieves data from a base62-encoded path parameter.
+   ```go
+   router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+       Path:       "/users/:data",
+       // ...
+       SourceType: router.Base62PathParameter,
+       SourceKey:  "data", // Will use the :data path parameter
+   })
+   ```
+
+#### Example Usage
+
+Here's a complete example of using different source types:
+
+```go
+package main
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/Suhaibinator/SRouter/pkg/codec"
+	"github.com/Suhaibinator/SRouter/pkg/router"
+	"go.uber.org/zap"
+)
+
+// Define request and response types
+type UserRequest struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type UserResponse struct {
+	Message string `json:"message"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+}
+
+// Define a handler
+func UserHandler(r *http.Request, req UserRequest) (UserResponse, error) {
+	return UserResponse{
+		Message: "Hello, " + req.Name + "!",
+		ID:      req.ID,
+		Name:    req.Name,
+	}, nil
+}
+
+func main() {
+	// Create a logger
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
+	// Create a router configuration
+	routerConfig := router.RouterConfig{
+		Logger:            logger,
+		GlobalTimeout:     2 * time.Second,
+		GlobalMaxBodySize: 1 << 20, // 1 MB
+	}
+
+	// Define auth and user ID functions
+	authFunction := func(ctx context.Context, token string) (string, bool) {
+		return token, token != ""
+	}
+
+	userIdFromUserFunction := func(user string) string {
+		return user
+	}
+
+	// Create a router
+	r := router.NewRouter[string, string](routerConfig, authFunction, userIdFromUserFunction)
+
+	// Register routes with different source types
+
+	// 1. Standard body-based route (default)
+	router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+		Path:    "/users/body/:id",
+		Methods: []string{"POST"},
+		Codec:   codec.NewJSONCodec[UserRequest, UserResponse](),
+		Handler: UserHandler,
+		// SourceType defaults to Body
+	})
+
+	// 2. Base64 query parameter route
+	router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+		Path:       "/users/query/:id",
+		Methods:    []string{"GET"},
+		Codec:      codec.NewJSONCodec[UserRequest, UserResponse](),
+		Handler:    UserHandler,
+		SourceType: router.Base64QueryParameter,
+		SourceKey:  "data", // Will look for ?data=base64encodedstring
+	})
+
+	// 3. Base64 path parameter route
+	router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+		Path:       "/users/path/:data",
+		Methods:    []string{"GET"},
+		Codec:      codec.NewJSONCodec[UserRequest, UserResponse](),
+		Handler:    UserHandler,
+		SourceType: router.Base64PathParameter,
+		SourceKey:  "data", // Will use the :data path parameter
+	})
+
+	// Start the server
+	fmt.Println("Server listening on :8080")
+	
+	// Example of how to create a base64-encoded request
+	reqData := UserRequest{ID: "123", Name: "John"}
+	jsonBytes, _ := json.Marshal(reqData)
+	base64Data := base64.StdEncoding.EncodeToString(jsonBytes)
+	
+	fmt.Println("Example curl commands:")
+	fmt.Println("  curl -X POST -H \"Content-Type: application/json\" -d '{\"id\":\"123\",\"name\":\"John\"}' http://localhost:8080/users/body/123")
+	fmt.Printf("  curl -X GET \"http://localhost:8080/users/query/123?data=%s\"\n", base64Data)
+	fmt.Printf("  curl -X GET http://localhost:8080/users/path/%s\n", base64Data)
+	
+	log.Fatal(http.ListenAndServe(":8080", r))
+}
+```
+
+#### When to Use Different Source Types
+
+- **Body** (default): Use for standard API requests where the client can send a request body.
+- **Base64QueryParameter**: Use when you need to include structured data in a GET request, or when working with clients that can't easily send request bodies.
+- **Base62QueryParameter**: Similar to Base64QueryParameter, but uses only alphanumeric characters, making it safer for URLs.
+- **Base64PathParameter**: Use when you want to include structured data as part of the URL path.
+- **Base62PathParameter**: Similar to Base64PathParameter, but uses only alphanumeric characters, making it safer for URLs.
+
+#### Error Handling
+
+SRouter provides appropriate error handling for each source type:
+
+- Missing parameters return 400 Bad Request with a descriptive message
+- Decoding errors return 400 Bad Request with details about the failure
+- Unmarshaling errors return 400 Bad Request with information about the issue
+
 ### Custom Codec
 
 You can create custom codecs for different data formats:
@@ -1107,6 +1292,7 @@ SRouter includes several examples to help you get started:
 - **examples/prometheus**: An example of using Prometheus metrics with SRouter
 - **examples/custom-metrics**: An example of using custom metrics with SRouter
 - **examples/rate-limiting**: An example of using rate limiting with SRouter
+- **examples/source-types**: An example of using different source types for request data
 - **examples/subrouters**: An example of using sub-routers with SRouter
 - **examples/trace-logging**: An example of using trace ID logging with SRouter
 
@@ -1225,6 +1411,8 @@ type RouteConfig[T any, U any] struct {
 	Codec       Codec[T, U]                           // Codec for marshaling/unmarshaling request and response
 	Handler     GenericHandler[T, U]                  // Generic handler function
 	Middlewares []common.Middleware                   // Middlewares applied to this specific route
+	SourceType  SourceType                            // How to retrieve request data (defaults to Body)
+	SourceKey   string                                // Parameter name for query or path parameters
 }
 ```
 
@@ -1242,6 +1430,29 @@ const (
 
 	// AuthRequired indicates that authentication is required for the route.
 	AuthRequired
+)
+```
+
+### SourceType
+
+```go
+type SourceType int
+
+const (
+	// Body retrieves data from the request body (default).
+	Body SourceType = iota
+
+	// Base64QueryParameter retrieves data from a base64-encoded query parameter.
+	Base64QueryParameter
+
+	// Base62QueryParameter retrieves data from a base62-encoded query parameter.
+	Base62QueryParameter
+
+	// Base64PathParameter retrieves data from a base64-encoded path parameter.
+	Base64PathParameter
+
+	// Base62PathParameter retrieves data from a base62-encoded path parameter.
+	Base62PathParameter
 )
 ```
 

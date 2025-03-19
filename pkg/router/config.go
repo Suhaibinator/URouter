@@ -32,6 +32,32 @@ const (
 	AuthRequired
 )
 
+// SourceType defines where to retrieve request data from.
+// It determines how the request data is extracted and decoded.
+type SourceType int
+
+const (
+	// Body retrieves data from the request body (default).
+	// The request body is read and passed directly to the codec for decoding.
+	Body SourceType = iota
+
+	// Base64QueryParameter retrieves data from a base64-encoded query parameter.
+	// The query parameter value is decoded from base64 before being passed to the codec.
+	Base64QueryParameter
+
+	// Base62QueryParameter retrieves data from a base62-encoded query parameter.
+	// The query parameter value is decoded from base62 before being passed to the codec.
+	Base62QueryParameter
+
+	// Base64PathParameter retrieves data from a base64-encoded path parameter.
+	// The path parameter value is decoded from base64 before being passed to the codec.
+	Base64PathParameter
+
+	// Base62PathParameter retrieves data from a base62-encoded path parameter.
+	// The path parameter value is decoded from base62 before being passed to the codec.
+	Base62PathParameter
+)
+
 // PrometheusConfig is removed in favor of MetricsConfig with v2 metrics system.
 // This type is kept for reference but should not be used.
 // Deprecated: Use MetricsConfig instead.
@@ -126,6 +152,8 @@ type RouteConfig[T any, U any] struct {
 	Codec       Codec[T, U]                           // Codec for marshaling/unmarshaling request and response
 	Handler     GenericHandler[T, U]                  // Generic handler function
 	Middlewares []common.Middleware                   // Middlewares applied to this specific route
+	SourceType  SourceType                            // How to retrieve request data (defaults to Body)
+	SourceKey   string                                // Query parameter name (only used for query parameters)
 }
 
 // Middleware is an alias for common.Middleware.

@@ -4,6 +4,7 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Suhaibinator/SRouter/pkg/codec"
 	"github.com/Suhaibinator/SRouter/pkg/common"
 	"github.com/Suhaibinator/SRouter/pkg/metrics"
 	"github.com/Suhaibinator/SRouter/pkg/middleware"
@@ -190,10 +192,154 @@ func RegisterGenericRoute[Req any, Resp any, UserID comparable, User any](r *Rou
 
 	// Create a handler that uses the codec to decode the request and encode the response
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// Decode the request
-		data, err := route.Codec.Decode(req)
-		if err != nil {
-			r.handleError(w, req, err, http.StatusBadRequest, "Failed to decode request")
+		var data Req
+		var err error
+
+		// Get data based on source type
+		switch route.SourceType {
+		case Body: // Default is Body (0)
+			// Use the codec's Decode method directly for body data
+			data, err = route.Codec.Decode(req)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest, "Failed to decode request body")
+				return
+			}
+
+		case Base64QueryParameter:
+			// Get from query parameter and decode base64
+			encodedData := req.URL.Query().Get(route.SourceKey)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing query parameter"),
+					http.StatusBadRequest, "Missing required query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Decode from base64
+			decodedData, err := codec.DecodeBase64(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base64 query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded query parameter data")
+				return
+			}
+			data = reqData
+
+		case Base62QueryParameter:
+			// Get from query parameter and decode base62
+			encodedData := req.URL.Query().Get(route.SourceKey)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing query parameter"),
+					http.StatusBadRequest, "Missing required query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Decode from base62
+			decodedData, err := codec.DecodeBase62(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base62 query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded query parameter data")
+				return
+			}
+			data = reqData
+
+		case Base64PathParameter:
+			// Get from path parameter and decode base64
+			paramName := route.SourceKey
+			if paramName == "" {
+				// If no specific parameter name is provided, use the first path parameter
+				params := GetParams(req)
+				if len(params) == 0 {
+					r.handleError(w, req, errors.New("no path parameters found"),
+						http.StatusBadRequest, "No path parameters found")
+					return
+				}
+				paramName = params[0].Key
+			}
+
+			encodedData := GetParam(req, paramName)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing path parameter"),
+					http.StatusBadRequest, "Missing required path parameter: "+paramName)
+				return
+			}
+
+			// Decode from base64
+			decodedData, err := codec.DecodeBase64(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base64 path parameter: "+paramName)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded path parameter data")
+				return
+			}
+			data = reqData
+
+		case Base62PathParameter:
+			// Get from path parameter and decode base62
+			paramName := route.SourceKey
+			if paramName == "" {
+				// If no specific parameter name is provided, use the first path parameter
+				params := GetParams(req)
+				if len(params) == 0 {
+					r.handleError(w, req, errors.New("no path parameters found"),
+						http.StatusBadRequest, "No path parameters found")
+					return
+				}
+				paramName = params[0].Key
+			}
+
+			encodedData := GetParam(req, paramName)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing path parameter"),
+					http.StatusBadRequest, "Missing required path parameter: "+paramName)
+				return
+			}
+
+			// Decode from base62
+			decodedData, err := codec.DecodeBase62(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base62 path parameter: "+paramName)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded path parameter data")
+				return
+			}
+			data = reqData
+
+		default:
+			r.handleError(w, req, errors.New("unsupported source type"),
+				http.StatusInternalServerError, "Unsupported source type")
 			return
 		}
 
