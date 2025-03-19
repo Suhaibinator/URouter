@@ -820,7 +820,7 @@ func TestMetricsMiddlewareImpl_Handler(t *testing.T) {
 	// Create a test handler
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 	})
 
 	// Wrap the handler with the middleware
@@ -873,7 +873,7 @@ func TestMetricsMiddlewareImpl_Handler_WithFilter(t *testing.T) {
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 	})
 
 	// Wrap the handler with the middleware
@@ -929,7 +929,7 @@ func TestMetricsMiddlewareImpl_Handler_WithSampler(t *testing.T) {
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 	})
 
 	// Wrap the handler with the middleware
