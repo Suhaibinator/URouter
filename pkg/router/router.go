@@ -223,7 +223,7 @@ func (r *Router[T, U]) registerSubRouter(sr SubRouterConfig) {
 					}
 
 					// Write the cached response
-					w.Write(cachedResponse)
+					_, _ = w.Write(cachedResponse)
 					return
 				}
 
@@ -280,7 +280,7 @@ func (r *Router[T, U]) registerSubRouter(sr SubRouterConfig) {
 				w.WriteHeader(recorder.Code)
 
 				// Write the response body
-				w.Write(responseBody)
+				_, _ = w.Write(responseBody)
 			})
 		}
 
@@ -397,7 +397,7 @@ func RegisterGenericRoute[Req any, Resp any, UserID comparable, User any](r *Rou
 					}
 
 					// Write the cached response
-					w.Write(cachedResponse)
+					_, _ = w.Write(cachedResponse)
 					return
 				}
 
@@ -609,7 +609,7 @@ func RegisterGenericRoute[Req any, Resp any, UserID comparable, User any](r *Rou
 			}
 
 			// Write the response to the original response writer
-			w.Write(responseBody)
+			_, _ = w.Write(responseBody)
 		} else {
 			// Encode the response directly to the response writer
 			err = route.Codec.Encode(w, resp)

@@ -667,7 +667,7 @@ func TestSubRouterCaching(t *testing.T) {
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							id := GetParam(r, "id")
 							w.Header().Set("Content-Type", "application/json")
-							w.Write([]byte(`{"id":"` + id + `","name":"User ` + id + `"}`))
+							_, _ = w.Write([]byte(`{"id":"` + id + `","name":"User ` + id + `"}`))
 						},
 					},
 				},
@@ -683,7 +683,7 @@ func TestSubRouterCaching(t *testing.T) {
 						Handler: func(w http.ResponseWriter, r *http.Request) {
 							id := GetParam(r, "id")
 							w.Header().Set("Content-Type", "application/json")
-							w.Write([]byte(`{"id":"` + id + `","name":"User ` + id + `"}`))
+							_, _ = w.Write([]byte(`{"id":"` + id + `","name":"User ` + id + `"}`))
 						},
 					},
 				},

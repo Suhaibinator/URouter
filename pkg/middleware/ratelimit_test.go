@@ -509,7 +509,7 @@ func TestRateLimitWithIPMiddleware(t *testing.T) {
 	defer serverWithoutIP.Close()
 
 	// Make a request
-	resp, err = client.Get(serverWithoutIP.URL)
+	_, err = client.Get(serverWithoutIP.URL)
 	if err != nil {
 		t.Fatalf("Failed to make request: %v", err)
 	}
