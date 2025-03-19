@@ -3,7 +3,8 @@ package codec
 
 import (
 	"encoding/base64"
-	"errors"
+	"fmt"
+	"math/big"
 )
 
 // DecodeBase64 decodes a base64-encoded string to bytes.
@@ -21,31 +22,51 @@ func DecodeBase64(encoded string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(encoded)
 }
 
-// DecodeBase62 decodes a base62-encoded string to bytes.
-// Base62 is a subset of base64 that uses only alphanumeric characters (A-Z, a-z, 0-9).
-// This encoding is useful for URLs and other contexts where special characters might cause issues.
-// This function is used by the router when processing requests with Base62QueryParameter
-// or Base62PathParameter source types.
+// DecodeBase62 decodes a base62-encoded string and returns the corresponding bytes.
 //
-// Parameters:
-//   - encoded: The base62-encoded string to decode
+// The base62 encoding uses the characters [0-9, A-Z, a-z], corresponding to
+// values [0..61]. This function treats the first 10 digits ('0'–'9') as values
+// 0–9, the next 26 letters ('A'–'Z') as values 10–35, and the final 26 letters
+// ('a'–'z') as values 36–61.
 //
-// Returns:
-//   - []byte: The decoded bytes
-//   - error: An error if the input is not valid base62 or if decoding is not implemented
-func DecodeBase62(encoded string) ([]byte, error) {
-	// This is a simple implementation that could be replaced with a more efficient one
-	// For now, we'll use a third-party library or implement a basic version
-
-	// Check if the string contains only base62 characters
-	for _, c := range encoded {
-		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
-			return nil, errors.New("invalid base62 character")
-		}
+// An error is returned if the input string contains invalid characters.
+//
+// Example usage:
+//
+//	decoded, err := DecodeBase62("0A1B")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Decoded bytes: %x\n", decoded)
+func DecodeBase62(s string) ([]byte, error) {
+	if len(s) == 0 {
+		// Decide if you want to treat empty string as zero-length bytes or return an error.
+		// Here we'll just return an empty slice.
+		return []byte{}, nil
 	}
 
-	// For now, we'll use a placeholder implementation
-	// In a real implementation, you would convert from base62 to binary
-	// This is just a stub that needs to be replaced with a proper implementation
-	return []byte(encoded), errors.New("base62 decoding not fully implemented")
+	// Build a character -> value map
+	charMap := make(map[rune]int)
+	for i := 0; i < 10; i++ {
+		charMap[rune('0'+i)] = i
+	}
+	for i := 0; i < 26; i++ {
+		charMap[rune('A'+i)] = 10 + i
+		charMap[rune('a'+i)] = 36 + i
+	}
+
+	var result big.Int
+
+	for _, c := range s {
+		val, ok := charMap[c]
+		if !ok {
+			return nil, fmt.Errorf("invalid base62 character: %q", c)
+		}
+		result.Mul(&result, big.NewInt(62))
+		result.Add(&result, big.NewInt(int64(val)))
+	}
+
+	// Convert big.Int to a byte slice.
+	decoded := result.Bytes()
+	return decoded, nil
 }

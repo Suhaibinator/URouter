@@ -1114,11 +1114,30 @@ func (r *Router[T, U]) recoveryMiddleware(next http.Handler) http.Handler {
 // If authentication fails, it returns a 401 Unauthorized response.
 // It uses the middleware.AuthenticationWithUser function with a configurable authentication function.
 func (r *Router[T, U]) authRequiredMiddleware(next http.Handler) http.Handler {
-	return middleware.AuthenticationWithUser(func(req *http.Request) (*U, error) {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// Check for the presence of an Authorization header
 		authHeader := req.Header.Get("Authorization")
 		if authHeader == "" {
-			return nil, errors.New("no authorization header")
+			// Get trace ID from context
+			traceID := middleware.GetTraceID(req)
+
+			// Create log fields
+			fields := []zap.Field{
+				zap.String("method", req.Method),
+				zap.String("path", req.URL.Path),
+				zap.String("remote_addr", req.RemoteAddr),
+				zap.String("error", "no authorization header"),
+			}
+
+			// Add trace ID if enabled and present
+			if r.config.EnableTraceID && traceID != "" {
+				fields = append([]zap.Field{zap.String("trace_id", traceID)}, fields...)
+			}
+
+			// Log that authentication failed
+			r.logger.Warn("Authentication failed", fields...)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
 		}
 
 		// Extract the token from the Authorization header
@@ -1141,12 +1160,13 @@ func (r *Router[T, U]) authRequiredMiddleware(next http.Handler) http.Handler {
 
 			// Add trace ID if enabled and present
 			if r.config.EnableTraceID && traceID != "" {
-				fields = append([]zap.Field{zap.String("trace_id", traceID)}, fields...)
+				fields = append(fields, zap.String("trace_id", traceID))
 			}
 
 			// Log that authentication was successful
 			r.logger.Debug("Authentication successful", fields...)
-			return &user, nil
+			next.ServeHTTP(w, req)
+			return
 		}
 
 		// Get trace ID from context
@@ -1157,6 +1177,7 @@ func (r *Router[T, U]) authRequiredMiddleware(next http.Handler) http.Handler {
 			zap.String("method", req.Method),
 			zap.String("path", req.URL.Path),
 			zap.String("remote_addr", req.RemoteAddr),
+			zap.String("error", "invalid token"),
 		}
 
 		// Add trace ID if enabled and present
@@ -1166,8 +1187,8 @@ func (r *Router[T, U]) authRequiredMiddleware(next http.Handler) http.Handler {
 
 		// Log that authentication failed
 		r.logger.Warn("Authentication failed", fields...)
-		return nil, errors.New("invalid token")
-	})(next)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	})
 }
 
 // authOptionalMiddleware is a middleware that attempts authentication for a request,

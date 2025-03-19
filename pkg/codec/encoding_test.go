@@ -74,13 +74,13 @@ func TestDecodeBase62(t *testing.T) {
 	}{
 		{
 			name:        "Valid base62 characters",
-			input:       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-			expectError: true, // Currently returns an error as it's not fully implemented
+			input:       "73XpUgyMwkGr29M", // "Hello World" in base64, which is also valid base62
+			expectError: false,
 		},
 		{
 			name:        "Empty string",
 			input:       "",
-			expectError: true, // Currently returns an error as it's not fully implemented
+			expectError: false, // Empty string is valid base64
 		},
 		{
 			name:        "Invalid base62 characters",
