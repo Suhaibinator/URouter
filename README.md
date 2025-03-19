@@ -867,22 +867,65 @@ router.RegisterGenericRoute[CreateUserReq, CreateUserResp, string](r, router.Rou
 
 ### Metrics
 
-SRouter provides a flexible metrics system that supports multiple metric formats and allows for custom metric collectors, exporters, and middleware.
+SRouter provides a flexible, interface-based metrics system that allows you to use your preferred metrics implementation while the framework handles the collection and aggregation of metrics.
 
-#### Using Prometheus Metrics (Default)
+#### Interface-Based Metrics System
 
-The simplest way to use metrics is with the built-in Prometheus support:
+The metrics system is built around a set of interfaces that define the contract between the framework and the metrics implementation:
+
+- `MetricsRegistry`: Registry for creating and managing metrics
+- `MetricsExporter`: Exporter for exposing metrics to monitoring systems
+- `MetricsMiddleware`: Middleware for collecting metrics from HTTP requests
+- `Metric`: Base interface for all metrics (Counter, Gauge, Histogram, Summary)
+
+This approach allows you to:
+
+1. **Use any metrics implementation**: Implement the interfaces with your preferred metrics library
+2. **Customize metrics collection**: Control how metrics are collected and what metrics are exposed
+3. **Integrate with existing systems**: Easily integrate with your existing monitoring infrastructure
+
+#### Using Prometheus Metrics
+
+Here's an example of using Prometheus metrics with SRouter:
 
 ```go
-// Create a Prometheus registry
-promRegistry := prometheus.NewRegistry()
+package main
 
-// Create a router configuration with Prometheus metrics enabled
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/Suhaibinator/SRouter/pkg/metrics"
+	"github.com/Suhaibinator/SRouter/pkg/router"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
+)
+
+// PrometheusRegistry implements the metrics.MetricsRegistry interface
+type PrometheusRegistry struct {
+	registry *prometheus.Registry
+}
+
+func NewPrometheusRegistry() *PrometheusRegistry {
+	return &PrometheusRegistry{
+		registry: prometheus.NewRegistry(),
+	}
+}
+
+// Implement the metrics.MetricsRegistry interface methods...
+
+// Create a router configuration with metrics enabled
 routerConfig := router.RouterConfig{
-	// ...
-	EnableMetrics: true,
-	PrometheusConfig: &router.PrometheusConfig{
-		Registry:         promRegistry,
+	Logger:            logger,
+	GlobalTimeout:     2 * time.Second,
+	GlobalMaxBodySize: 1 << 20, // 1 MB
+	EnableMetrics:     true,
+	MetricsConfig: &router.MetricsConfig{
+		Collector:        registry, // Your implementation of metrics.MetricsRegistry
 		Namespace:        "myapp",
 		Subsystem:        "api",
 		EnableLatency:    true,
@@ -894,10 +937,10 @@ routerConfig := router.RouterConfig{
 }
 
 // Create a router
-r := router.NewRouter(routerConfig)
+r := router.NewRouter[string, string](routerConfig, authFunction, userIdFromUserFunction)
 
 // Create a metrics handler
-metricsHandler := middleware.PrometheusHandler(promRegistry)
+metricsHandler := registry.Handler() // Your implementation of metrics.MetricsExporter.Handler()
 
 // Create a mux to handle both the API and metrics endpoints
 mux := http.NewServeMux()
@@ -910,250 +953,145 @@ http.ListenAndServe(":8080", mux)
 
 See the `examples/prometheus` directory for a complete example of Prometheus metrics.
 
-#### Using the Metrics Abstraction Layer (v1)
+#### Creating Your Own Metrics Implementation
 
-SRouter provides a metrics abstraction layer that allows you to use different metric collectors, exporters, and middleware:
+You can create your own metrics implementation by implementing the interfaces defined in the `metrics` package:
 
 ```go
-// Create a Prometheus collector
-collector := metrics.DefaultPrometheusCollector("myapp", "api")
-
-// Create a Prometheus exporter
-exporter := metrics.DefaultPrometheusExporter()
-
-// Create a router configuration with metrics
-routerConfig := router.RouterConfig{
-	// ...
-	EnableMetrics: true,
-	MetricsConfig: &router.MetricsConfig{
-		Collector:  collector,
-		Exporter:   exporter,
-		Namespace:  "myapp",
-		Subsystem:  "api",
-		EnableLatency:    true,
-		EnableThroughput: true,
-		EnableQPS:        true,
-		EnableErrors:     true,
-	},
-	// ...
+// Create a custom metrics registry
+type CustomRegistry struct {
+	// Your implementation details
 }
 
-// Create a router
-r := router.NewRouter(routerConfig)
-
-// Create a metrics handler
-metricsHandler := exporter.Handler()
-
-// Create a mux to handle both the API and metrics endpoints
-mux := http.NewServeMux()
-mux.Handle("/metrics", metricsHandler)
-mux.Handle("/", r)
-
-// Start the server
-http.ListenAndServe(":8080", mux)
-```
-
-#### Using the Enhanced Metrics System (v2)
-
-SRouter now provides an enhanced metrics system (v2) with a more elegant and flexible approach to metrics collection and exposition:
-
-```go
-import (
-	"github.com/Suhaibinator/SRouter/pkg/metrics/v2"
-	"github.com/Suhaibinator/SRouter/pkg/router"
-)
-
-// Create a metrics registry
-registry := v2.NewPrometheusRegistry()
-
-// Create metrics with a fluent API
-counter := registry.NewCounter().
-	Name("http_requests_total").
-	Description("Total number of HTTP requests").
-	Tag("service", "api").
-	Build()
-
-gauge := registry.NewGauge().
-	Name("active_connections").
-	Description("Number of active connections").
-	Tag("service", "api").
-	Build()
-
-histogram := registry.NewHistogram().
-	Name("http_request_duration_seconds").
-	Description("HTTP request latency in seconds").
-	Buckets([]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}).
-	Build()
-
-// Create a Prometheus exporter
-exporter := v2.NewPrometheusExporter(registry)
-
-// Create a router configuration with metrics
-routerConfig := router.RouterConfig{
-	// ...
-	EnableMetrics: true,
-	MetricsConfig: &router.MetricsConfig{
-		Collector:  registry,
-		Exporter:   exporter,
-		Namespace:  "myapp",
-		Subsystem:  "api",
-		EnableLatency:    true,
-		EnableThroughput: true,
-		EnableQPS:        true,
-		EnableErrors:     true,
-	},
-	// ...
+// Implement the metrics.MetricsRegistry interface
+func (r *CustomRegistry) Register(metric metrics.Metric) error {
+	// Your implementation
 }
 
-// Create a router
-r := router.NewRouter(routerConfig)
+func (r *CustomRegistry) Get(name string) (metrics.Metric, bool) {
+	// Your implementation
+}
 
-// Create a metrics handler
-metricsHandler := exporter.Handler()
+func (r *CustomRegistry) Unregister(name string) bool {
+	// Your implementation
+}
 
-// Create a mux to handle both the API and metrics endpoints
-mux := http.NewServeMux()
-mux.Handle("/metrics", metricsHandler)
-mux.Handle("/", r)
+func (r *CustomRegistry) Clear() {
+	// Your implementation
+}
 
-// Start the server
-http.ListenAndServe(":8080", mux)
-```
+func (r *CustomRegistry) Snapshot() metrics.MetricsSnapshot {
+	// Your implementation
+}
 
-The v2 metrics system provides several advantages:
+func (r *CustomRegistry) WithTags(tags metrics.Tags) metrics.MetricsRegistry {
+	// Your implementation
+}
 
-1. **Fluent API**: A more intuitive and chainable API for creating metrics
-2. **Tags Support**: First-class support for metric tags (labels)
-3. **Type Safety**: Strong typing for different metric types
-4. **Separation of Concerns**: Clear separation between collection and exposition
-5. **Extensibility**: Easy to extend with custom collectors and exporters
+func (r *CustomRegistry) NewCounter() metrics.CounterBuilder {
+	// Your implementation
+}
 
-#### Using External Metric Collectors
+func (r *CustomRegistry) NewGauge() metrics.GaugeBuilder {
+	// Your implementation
+}
 
-You can use external metric collectors by implementing the appropriate interfaces:
+func (r *CustomRegistry) NewHistogram() metrics.HistogramBuilder {
+	// Your implementation
+}
 
-```go
-// Create a custom metrics collector
-customCollector := NewCustomMetricsCollector("myapp", "api")
+func (r *CustomRegistry) NewSummary() metrics.SummaryBuilder {
+	// Your implementation
+}
 
 // Create a custom metrics exporter
-customExporter := NewCustomMetricsExporter(customCollector)
+type CustomExporter struct {
+	// Your implementation details
+}
 
-// Create a custom metrics middleware factory
-customMiddlewareFactory := NewCustomMetricsMiddlewareFactory(customCollector)
+// Implement the metrics.MetricsExporter interface
+func (e *CustomExporter) Export(snapshot metrics.MetricsSnapshot) error {
+	// Your implementation
+}
 
-// Create a router configuration with custom metrics
-routerConfig := router.RouterConfig{
-	// ...
-	EnableMetrics: true,
-	MetricsConfig: &router.MetricsConfig{
-		Collector:         customCollector,
-		Exporter:          customExporter,
-		MiddlewareFactory: customMiddlewareFactory,
-		Namespace:         "myapp",
-		Subsystem:         "api",
-		EnableLatency:     true,
-		EnableThroughput:  true,
-		EnableQPS:         true,
-		EnableErrors:      true,
-	},
-	// ...
+func (e *CustomExporter) Start() error {
+	// Your implementation
+}
+
+func (e *CustomExporter) Stop() error {
+	// Your implementation
+}
+
+func (e *CustomExporter) Handler() http.Handler {
+	// Your implementation
 }
 ```
 
-#### Dependency Injection for Metrics Components
+#### Using the Metrics Middleware
 
-You can inject your own metrics components:
+The metrics middleware is automatically added to the router when metrics are enabled. It collects the following metrics:
+
+- **Latency**: Request latency in seconds
+- **Throughput**: Request throughput in bytes
+- **QPS**: Queries per second
+- **Errors**: Request errors by status code
+
+You can configure which metrics are collected using the `MetricsConfig`:
 
 ```go
-// Create a Prometheus registry
-registry := prometheus.NewRegistry()
-
-// Create a Prometheus collector with the registry
-collector := metrics.NewPrometheusCollector(registry, "myapp", "api")
-
-// Create a Prometheus exporter with the registry
-exporter := metrics.NewPrometheusExporter(registry)
-
-// Create a Prometheus middleware factory with the collector
-middlewareFactory := metrics.NewPrometheusMiddlewareFactory(
-	collector,
-	true,  // enableLatency
-	true,  // enableThroughput
-	true,  // enableQPS
-	true,  // enableErrors
-)
-
-// Create a router configuration with the metrics components
 routerConfig := router.RouterConfig{
 	// ...
 	EnableMetrics: true,
 	MetricsConfig: &router.MetricsConfig{
-		Collector:         collector,
-		Exporter:          exporter,
-		MiddlewareFactory: middlewareFactory,
-		Namespace:         "myapp",
-		Subsystem:         "api",
+		Collector:        registry,
+		Namespace:        "myapp",
+		Subsystem:        "api",
+		EnableLatency:    true,  // Enable latency metrics
+		EnableThroughput: true,  // Enable throughput metrics
+		EnableQPS:        true,  // Enable QPS metrics
+		EnableErrors:     true,  // Enable error metrics
 	},
 	// ...
 }
 ```
 
-#### Supporting Multiple Metric Formats
+#### Customizing Metrics Collection
 
-You can support multiple metric formats by creating different exporters:
+You can customize metrics collection by implementing the `MetricsFilter` and `MetricsSampler` interfaces:
 
 ```go
-// Create a Prometheus registry
-promRegistry := prometheus.NewRegistry()
-
-// Create a Prometheus collector
-prometheusCollector := metrics.NewPrometheusCollector(promRegistry, "myapp", "api")
-
-// Create a Prometheus exporter
-prometheusExporter := metrics.NewPrometheusExporter(promRegistry)
-
-// Create a custom metrics collector
-customCollector := NewCustomMetricsCollector("myapp", "api")
-
-// Create a custom metrics exporter
-customExporter := NewCustomMetricsExporter(customCollector)
-
-// Create a router configuration with Prometheus metrics
-routerConfig := router.RouterConfig{
-	// ...
-	EnableMetrics: true,
-	MetricsConfig: &router.MetricsConfig{
-		Collector:  prometheusCollector,
-		Exporter:   prometheusExporter,
-		Namespace:  "myapp",
-		Subsystem:  "api",
-		EnableLatency:    true,
-		EnableThroughput: true,
-		EnableQPS:        true,
-		EnableErrors:     true,
-	},
-	// ...
+// Create a custom metrics filter
+type CustomFilter struct {
+	// Your implementation details
 }
 
-// Create a router
-r := router.NewRouter(routerConfig)
+// Implement the metrics.MetricsFilter interface
+func (f *CustomFilter) Filter(r *http.Request) bool {
+	// Return true if metrics should be collected for this request
+	return r.URL.Path != "/health" // Don't collect metrics for health checks
+}
 
-// Create metrics handlers for both formats
-prometheusMetricsHandler := prometheusExporter.Handler()
-customMetricsHandler := customExporter.Handler()
+// Create a custom metrics sampler
+type CustomSampler struct {
+	// Your implementation details
+}
 
-// Create a mux to handle both the API and metrics endpoints
-mux := http.NewServeMux()
-mux.Handle("/metrics/prometheus", prometheusMetricsHandler)
-mux.Handle("/metrics/custom", customMetricsHandler)
-mux.Handle("/", r)
+// Implement the metrics.MetricsSampler interface
+func (s *CustomSampler) Sample() bool {
+	// Return true if this request should be sampled
+	return rand.Float64() < 0.1 // Sample 10% of requests
+}
 
-// Start the server
-http.ListenAndServe(":8080", mux)
+// Create a metrics middleware with the custom filter and sampler
+middleware := metrics.NewMetricsMiddleware(registry, metrics.MetricsMiddlewareConfig{
+	EnableLatency:    true,
+	EnableThroughput: true,
+	EnableQPS:        true,
+	EnableErrors:     true,
+}).WithFilter(&CustomFilter{}).WithSampler(&CustomSampler{})
 ```
 
-See the `examples/custom-metrics` directory for a complete example of using the metrics abstraction layer with custom metrics.
+See the `examples/custom-metrics` directory for a complete example of using custom metrics.
 
 ## Examples
 

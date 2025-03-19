@@ -1,5 +1,8 @@
-// Package metrics provides an enhanced metrics system for SRouter.
-// It includes a fluent API, first-class tags support, and separation of collection and exposition.
+// Package metrics provides an interface-based metrics system for SRouter.
+// It defines interfaces for metrics collection and exposition, allowing users to provide
+// their own implementations while the framework uses the methods exposed by these interfaces
+// to aggregate metrics. This approach maintains separation of concerns, where the framework
+// defines the interfaces and the users provide the implementations.
 package metrics
 
 import (

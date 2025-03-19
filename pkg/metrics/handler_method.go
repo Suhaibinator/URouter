@@ -5,7 +5,9 @@ import (
 	"time"
 )
 
-// Handler wraps an HTTP handler with metrics collection.
+// Handler wraps an HTTP handler with metrics collection. It captures metrics such as
+// request latency, throughput, QPS, and errors based on the middleware configuration.
+// The metrics are collected using the registry provided to the middleware.
 func (m *MetricsMiddlewareImpl) Handler(name string, handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if we should collect metrics for this request
