@@ -113,6 +113,9 @@ type RouterConfig struct {
 	SubRouters         []SubRouterConfig                     // Sub-routers with their own configurations
 	Middlewares        []common.Middleware                   // Global middlewares applied to all routes
 	AddUserObjectToCtx bool                                  // Add user object to context
+	CacheGet           func(string) ([]byte, bool)           // Function to retrieve cached responses
+	CacheSet           func(string, []byte) error            // Function to store responses in the cache
+	CacheKeyPrefix     string                                // Prefix for cache keys to avoid collisions
 }
 
 // SubRouterConfig defines configuration for a group of routes with a common path prefix.
@@ -124,6 +127,8 @@ type SubRouterConfig struct {
 	RateLimitOverride   *middleware.RateLimitConfig[any, any] // Override global rate limit for all routes in this sub-router
 	Routes              []RouteConfigBase                     // Routes in this sub-router
 	Middlewares         []common.Middleware                   // Middlewares applied to all routes in this sub-router
+	CacheResponse       bool                                  // Whether to cache responses for routes in this sub-router
+	CacheKeyPrefix      string                                // Prefix for cache keys to avoid collisions
 }
 
 // RouteConfigBase defines the base configuration for a route without generics.
@@ -143,17 +148,19 @@ type RouteConfigBase struct {
 // It extends RouteConfigBase with type parameters for request and response data,
 // allowing for strongly-typed handlers and automatic marshaling/unmarshaling.
 type RouteConfig[T any, U any] struct {
-	Path        string                                // Route path (will be prefixed with sub-router path prefix if applicable)
-	Methods     []string                              // HTTP methods this route handles
-	AuthLevel   AuthLevel                             // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
-	Timeout     time.Duration                         // Override timeout for this specific route
-	MaxBodySize int64                                 // Override max body size for this specific route
-	RateLimit   *middleware.RateLimitConfig[any, any] // Rate limit for this specific route
-	Codec       Codec[T, U]                           // Codec for marshaling/unmarshaling request and response
-	Handler     GenericHandler[T, U]                  // Generic handler function
-	Middlewares []common.Middleware                   // Middlewares applied to this specific route
-	SourceType  SourceType                            // How to retrieve request data (defaults to Body)
-	SourceKey   string                                // Query parameter name (only used for query parameters)
+	Path           string                                // Route path (will be prefixed with sub-router path prefix if applicable)
+	Methods        []string                              // HTTP methods this route handles
+	AuthLevel      AuthLevel                             // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
+	Timeout        time.Duration                         // Override timeout for this specific route
+	MaxBodySize    int64                                 // Override max body size for this specific route
+	RateLimit      *middleware.RateLimitConfig[any, any] // Rate limit for this specific route
+	Codec          Codec[T, U]                           // Codec for marshaling/unmarshaling request and response
+	Handler        GenericHandler[T, U]                  // Generic handler function
+	Middlewares    []common.Middleware                   // Middlewares applied to this specific route
+	SourceType     SourceType                            // How to retrieve request data (defaults to Body)
+	SourceKey      string                                // Query parameter name (only used for query parameters)
+	CacheResponse  bool                                  // Whether to cache responses for this route
+	CacheKeyPrefix string                                // Prefix for cache keys to avoid collisions
 }
 
 // Middleware is an alias for common.Middleware.

@@ -23,6 +23,7 @@ SRouter is a high-performance HTTP router for Go that wraps [julienschmidt/httpr
 - **Intelligent Logging**: Appropriate log levels for different types of events
 - **Trace ID Logging**: Automatically generate and include a unique trace ID for each request in all log entries
 - **Flexible Request Data Sources**: Support for retrieving request data from various sources including request body, query parameters, and path parameters with automatic decoding
+- **Response Caching**: Built-in caching support for query and path parameter-based routes with customizable cache implementations
 
 ## Installation
 
@@ -993,6 +994,205 @@ SRouter provides appropriate error handling for each source type:
 - Decoding errors return 400 Bad Request with details about the failure
 - Unmarshaling errors return 400 Bad Request with information about the issue
 
+### Response Caching
+
+SRouter provides built-in caching support for query and path parameter-based routes. This is particularly useful for improving performance of read-heavy APIs or when working with expensive operations.
+
+#### Configuring Caching
+
+To enable caching, you need to:
+
+1. Provide cache functions in the router configuration
+2. Enable caching for specific routes
+
+```go
+// Create a simple in-memory cache
+type InMemoryCache struct {
+	cache map[string][]byte
+	mu    sync.RWMutex
+}
+
+func NewInMemoryCache() *InMemoryCache {
+	return &InMemoryCache{
+		cache: make(map[string][]byte),
+	}
+}
+
+func (c *InMemoryCache) Get(key string) ([]byte, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	value, found := c.cache[key]
+	return value, found
+}
+
+func (c *InMemoryCache) Set(key string, value []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache[key] = value
+	return nil
+}
+
+// Create a cache instance
+cache := NewInMemoryCache()
+
+// Configure the router with cache functions
+routerConfig := router.RouterConfig{
+	// ... other config
+	CacheGet: cache.Get,
+	CacheSet: cache.Set,
+	CacheKeyPrefix: "global:", // Global prefix for all cache keys
+}
+
+// Create a router
+r := router.NewRouter[string, string](routerConfig, authFunction, userIdFromUserFunction)
+
+// Register routes with caching enabled
+router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+	Path:          "/users/query",
+	Methods:       []string{"GET"},
+	Codec:         jsonCodec,
+	Handler:       getUserHandler,
+	SourceType:    router.Base64QueryParameter,
+	SourceKey:     "data",
+	CacheResponse: true, // Enable caching for this route
+	CacheKeyPrefix: "users:", // Route-specific prefix (will override global prefix)
+})
+
+// Create a sub-router with caching enabled for all routes
+subRouter := router.SubRouterConfig{
+	PathPrefix:     "/api/v1",
+	CacheResponse:  true, // Enable caching for all routes in this sub-router
+	CacheKeyPrefix: "api-v1:", // Sub-router specific prefix
+	Routes: []router.RouteConfigBase{
+		// Routes will inherit caching settings from the sub-router
+	},
+}
+```
+
+#### Cache Key Prefix Hierarchy
+
+SRouter uses a hierarchical approach to cache key prefixes:
+
+1. **Route-specific prefix**: If a route has a `CacheKeyPrefix` set, it will be used.
+2. **Sub-router prefix**: If a route is part of a sub-router with a `CacheKeyPrefix` set, and the route doesn't have its own prefix, the sub-router's prefix will be used.
+3. **Global prefix**: If neither the route nor its sub-router has a prefix, the global `CacheKeyPrefix` from the router configuration will be used.
+
+This hierarchy allows you to:
+
+- Set a global prefix for all cached responses
+- Override the global prefix for a group of related routes using a sub-router
+- Override both the global and sub-router prefixes for specific routes
+
+For example:
+
+```go
+// Global prefix: "global:"
+routerConfig := router.RouterConfig{
+	// ... other config
+	CacheGet: cache.Get,
+	CacheSet: cache.Set,
+	CacheKeyPrefix: "global:",
+	SubRouters: []router.SubRouterConfig{
+		{
+			PathPrefix: "/api/v1",
+			CacheResponse: true,
+			CacheKeyPrefix: "api-v1:", // Override global prefix for this sub-router
+			Routes: []router.RouteConfigBase{
+				// These routes will use "api-v1:" as their cache key prefix
+			},
+		},
+		{
+			PathPrefix: "/api/v2",
+			CacheResponse: true,
+			// No CacheKeyPrefix, will use global prefix "global:"
+			Routes: []router.RouteConfigBase{
+				// These routes will use "global:" as their cache key prefix
+			},
+		},
+	},
+}
+
+// Route-specific prefix: "users:"
+router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+	Path: "/api/v1/users/query",
+	// ... other config
+	CacheResponse: true,
+	CacheKeyPrefix: "users:", // Override sub-router prefix for this route
+})
+
+// No route-specific prefix, will use sub-router prefix "api-v1:"
+router.RegisterGenericRoute[UserRequest, UserResponse, string](r, router.RouteConfig[UserRequest, UserResponse]{
+	Path: "/api/v1/products/query",
+	// ... other config
+	CacheResponse: true,
+	// No CacheKeyPrefix, will use sub-router prefix "api-v1:"
+})
+```
+
+This approach helps you organize your cache keys and avoid collisions between different parts of your application.
+
+#### Caching Behavior
+
+- Caching is only supported for routes that use query or path parameters as input sources (not for body-based routes)
+- The cache key is the raw encoded value from the query or path parameter, without any decoding
+- You can configure a CacheKeyPrefix at the router, sub-router, or route level to avoid cache collisions
+- Caching happens before the codec level, so if there's a cache hit, the request doesn't even reach your handler
+- If there's a cache miss, the request is processed normally and the response is cached before being sent
+
+#### Cache Metrics
+
+When metrics are enabled, SRouter automatically collects the following cache-related metrics:
+
+- **Cache Hits**: Number of cache hits
+- **Cache Misses**: Number of cache misses
+- **Cache Hit Ratio**: Ratio of cache hits to total cache lookups
+
+These metrics can be accessed through your metrics system (e.g., Prometheus) to monitor cache performance.
+
+#### Using Different Cache Implementations
+
+You can use any cache implementation by providing functions that match the following signatures:
+
+```go
+CacheGet: func(string) ([]byte, bool)
+CacheSet: func(string, []byte) error
+```
+
+This allows you to use various caching solutions:
+
+- In-memory caches like the one shown above
+- Distributed caches like Redis or Memcached
+- Persistent caches backed by a database
+- Tiered caching systems with multiple layers
+
+For example, to use Redis:
+
+```go
+import "github.com/go-redis/redis/v8"
+
+// Create a Redis client
+rdb := redis.NewClient(&redis.Options{
+	Addr: "localhost:6379",
+})
+
+// Configure the router with Redis cache functions
+routerConfig := router.RouterConfig{
+	// ... other config
+	CacheGet: func(key string) ([]byte, bool) {
+		val, err := rdb.Get(context.Background(), key).Bytes()
+		if err != nil {
+			return nil, false
+		}
+		return val, true
+	},
+	CacheSet: func(key string, value []byte) error {
+		return rdb.Set(context.Background(), key, value, time.Hour).Err()
+	},
+}
+```
+
+See the `examples/caching` directory for a complete example of response caching.
+
 ### Custom Codec
 
 You can create custom codecs for different data formats:
@@ -1295,6 +1495,7 @@ SRouter includes several examples to help you get started:
 - **examples/source-types**: An example of using different source types for request data
 - **examples/subrouters**: An example of using sub-routers with SRouter
 - **examples/trace-logging**: An example of using trace ID logging with SRouter
+- **examples/caching**: An example of using response caching with SRouter
 
 Each example includes a complete, runnable application that demonstrates a specific feature of SRouter.
 
@@ -1317,6 +1518,9 @@ type RouterConfig struct {
 	SubRouters         []SubRouterConfig                     // Sub-routers with their own configurations
 	Middlewares        []common.Middleware                   // Global middlewares applied to all routes
 	AddUserObjectToCtx bool                                  // Add user object to context
+	CacheGet           func(string) ([]byte, bool)           // Function to retrieve cached responses
+	CacheSet           func(string, []byte) error            // Function to store responses in the cache
+	CacheKeyPrefix     string                                // Prefix for cache keys to avoid collisions
 }
 ```
 
@@ -1380,6 +1584,8 @@ type SubRouterConfig struct {
 	RateLimitOverride   *middleware.RateLimitConfig[any, any] // Override global rate limit for all routes in this sub-router
 	Routes              []RouteConfigBase                     // Routes in this sub-router
 	Middlewares         []common.Middleware                   // Middlewares applied to all routes in this sub-router
+	CacheResponse       bool                                  // Enable caching for all routes in this sub-router
+	CacheKeyPrefix      string                                // Prefix for cache keys to avoid collisions
 }
 ```
 
@@ -1402,17 +1608,19 @@ type RouteConfigBase struct {
 
 ```go
 type RouteConfig[T any, U any] struct {
-	Path        string                                // Route path (will be prefixed with sub-router path prefix if applicable)
-	Methods     []string                              // HTTP methods this route handles
-	AuthLevel   AuthLevel                             // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
-	Timeout     time.Duration                         // Override timeout for this specific route
-	MaxBodySize int64                                 // Override max body size for this specific route
-	RateLimit   *middleware.RateLimitConfig[any, any] // Rate limit for this specific route
-	Codec       Codec[T, U]                           // Codec for marshaling/unmarshaling request and response
-	Handler     GenericHandler[T, U]                  // Generic handler function
-	Middlewares []common.Middleware                   // Middlewares applied to this specific route
-	SourceType  SourceType                            // How to retrieve request data (defaults to Body)
-	SourceKey   string                                // Parameter name for query or path parameters
+	Path          string                                // Route path (will be prefixed with sub-router path prefix if applicable)
+	Methods       []string                              // HTTP methods this route handles
+	AuthLevel     AuthLevel                             // Authentication level for this route (NoAuth, AuthOptional, or AuthRequired)
+	Timeout       time.Duration                         // Override timeout for this specific route
+	MaxBodySize   int64                                 // Override max body size for this specific route
+	RateLimit     *middleware.RateLimitConfig[any, any] // Rate limit for this specific route
+	Codec         Codec[T, U]                           // Codec for marshaling/unmarshaling request and response
+	Handler       GenericHandler[T, U]                  // Generic handler function
+	Middlewares   []common.Middleware                   // Middlewares applied to this specific route
+	SourceType    SourceType                            // How to retrieve request data (defaults to Body)
+	SourceKey     string                                // Parameter name for query or path parameters
+	CacheResponse bool                                  // Enable caching for this route (only works with query/path parameter source types)
+	CacheKeyPrefix string                               // Prefix for cache keys to avoid collisions
 }
 ```
 

@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +36,9 @@ type Router[T comparable, U any] struct {
 	shutdown          bool
 	shutdownMu        sync.RWMutex
 	metricsWriterPool sync.Pool // Pool for reusing metricsResponseWriter objects
+	cacheHitCounter   metrics.Counter
+	cacheMissCounter  metrics.Counter
+	cacheHitRatio     metrics.Gauge
 }
 
 // contextKey is a type for context keys.
@@ -124,6 +129,25 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 				metricsMiddleware = func(next http.Handler) http.Handler {
 					return metricsMiddlewareImpl.Handler("", next)
 				}
+
+				// Initialize cache metrics
+				r.cacheHitCounter = registry.NewCounter().
+					Name("cache_hits_total").
+					Description("Total number of cache hits").
+					Tag("service", config.MetricsConfig.Namespace).
+					Build()
+
+				r.cacheMissCounter = registry.NewCounter().
+					Name("cache_misses_total").
+					Description("Total number of cache misses").
+					Tag("service", config.MetricsConfig.Namespace).
+					Build()
+
+				r.cacheHitRatio = registry.NewGauge().
+					Name("cache_hit_ratio").
+					Description("Ratio of cache hits to total cache lookups").
+					Tag("service", config.MetricsConfig.Namespace).
+					Build()
 			}
 		}
 
@@ -155,11 +179,128 @@ func (r *Router[T, U]) registerSubRouter(sr SubRouterConfig) {
 		// Create a handler with all middlewares applied
 		handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, rateLimit, append(sr.Middlewares, route.Middlewares...))
 
+		// If caching is enabled for the sub-router, wrap the handler with a caching handler
+		if sr.CacheResponse && r.config.CacheGet != nil && r.config.CacheSet != nil {
+			// Get the effective cache key prefix
+			cacheKeyPrefix := r.getEffectiveCacheKeyPrefix("", sr.CacheKeyPrefix)
+
+			// Create a caching handler
+			originalHandler := handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				// Only cache GET requests
+				if req.Method != "GET" {
+					originalHandler.ServeHTTP(w, req)
+					return
+				}
+
+				// Create a cache key from the request path and query
+				cacheKey := req.URL.Path
+				if req.URL.RawQuery != "" {
+					cacheKey += "?" + req.URL.RawQuery
+				}
+
+				// Add the prefix if available
+				if cacheKeyPrefix != "" {
+					cacheKey = cacheKeyPrefix + ":" + cacheKey
+				}
+
+				// Try to get from cache
+				if cachedResponse, found := r.config.CacheGet(cacheKey); found {
+					// Log and record metrics for cache hit
+					r.logger.Debug("Cache hit", zap.String("cache_key", cacheKey))
+					if r.cacheHitCounter != nil {
+						r.cacheHitCounter.Inc()
+
+						// Update cache hit ratio
+						if r.cacheHitRatio != nil {
+							hits := r.cacheHitCounter.Value()
+							misses := r.cacheMissCounter.Value()
+							total := hits + misses
+							if total > 0 {
+								r.cacheHitRatio.Set(hits / total)
+							}
+						}
+					}
+
+					// Write the cached response
+					w.Write(cachedResponse)
+					return
+				}
+
+				// Log and record metrics for cache miss
+				r.logger.Debug("Cache miss", zap.String("cache_key", cacheKey))
+				if r.cacheMissCounter != nil {
+					r.cacheMissCounter.Inc()
+
+					// Update cache hit ratio
+					if r.cacheHitRatio != nil {
+						hits := r.cacheHitCounter.Value()
+						misses := r.cacheMissCounter.Value()
+						total := hits + misses
+						if total > 0 {
+							r.cacheHitRatio.Set(hits / total)
+						}
+					}
+				}
+
+				// Create a recorder to capture the response
+				recorder := httptest.NewRecorder()
+
+				// Call the original handler with the recorder
+				originalHandler.ServeHTTP(recorder, req)
+
+				// Get the response from the recorder
+				result := recorder.Result()
+				defer result.Body.Close()
+
+				// Read the response body
+				responseBody, err := io.ReadAll(result.Body)
+				if err != nil {
+					r.handleError(w, req, err, http.StatusInternalServerError, "Failed to read response body")
+					return
+				}
+
+				// Cache the response
+				cacheErr := r.config.CacheSet(cacheKey, responseBody)
+				if cacheErr != nil {
+					// Log the error but don't fail the request
+					r.logger.Warn("Failed to cache response",
+						zap.String("cache_key", cacheKey),
+						zap.Error(cacheErr))
+				} else {
+					r.logger.Debug("Response cached", zap.String("cache_key", cacheKey))
+				}
+
+				// Copy the headers from the recorder to the response writer
+				for k, v := range recorder.Header() {
+					w.Header()[k] = v
+				}
+
+				// Write the status code
+				w.WriteHeader(recorder.Code)
+
+				// Write the response body
+				w.Write(responseBody)
+			})
+		}
+
 		// Register the route with httprouter
 		for _, method := range route.Methods {
 			r.router.Handle(method, fullPath, r.convertToHTTPRouterHandle(handler))
 		}
 	}
+}
+
+// getEffectiveCacheKeyPrefix returns the effective cache key prefix for a route.
+// It considers route-specific, sub-router, and global cache key prefix settings in that order of precedence.
+func (r *Router[T, U]) getEffectiveCacheKeyPrefix(routePrefix, subRouterPrefix string) string {
+	if routePrefix != "" {
+		return routePrefix
+	}
+	if subRouterPrefix != "" {
+		return subRouterPrefix
+	}
+	return r.config.CacheKeyPrefix
 }
 
 // RegisterRoute registers a route with the router.
@@ -194,6 +335,89 @@ func RegisterGenericRoute[Req any, Resp any, UserID comparable, User any](r *Rou
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		var data Req
 		var err error
+		var encodedData string
+		var cacheKey string
+		var canCache bool
+
+		// Check if caching is enabled for this route
+		if route.CacheResponse && r.config.CacheGet != nil && r.config.CacheSet != nil {
+			// Caching is only supported for query and path parameter source types
+			canCache = route.SourceType == Base64QueryParameter ||
+				route.SourceType == Base62QueryParameter ||
+				route.SourceType == Base64PathParameter ||
+				route.SourceType == Base62PathParameter
+		}
+
+		// Try to get from cache if caching is enabled
+		if canCache {
+			// Get the encoded value based on source type
+			switch route.SourceType {
+			case Base64QueryParameter, Base62QueryParameter:
+				encodedData = req.URL.Query().Get(route.SourceKey)
+			case Base64PathParameter, Base62PathParameter:
+				paramName := route.SourceKey
+				if paramName == "" {
+					// If no specific parameter name is provided, use the first path parameter
+					params := GetParams(req)
+					if len(params) > 0 {
+						encodedData = params[0].Value
+					}
+				} else {
+					encodedData = GetParam(req, paramName)
+				}
+			}
+
+			// Use the encoded value as the cache key with prefix
+			if encodedData != "" {
+				// Apply cache key prefix if available
+				prefix := r.getEffectiveCacheKeyPrefix(route.CacheKeyPrefix, "")
+
+				if prefix != "" {
+					cacheKey = prefix + ":" + encodedData
+				} else {
+					cacheKey = encodedData
+				}
+
+				// Try to get from cache
+				if cachedResponse, found := r.config.CacheGet(cacheKey); found {
+					// Log and record metrics for cache hit
+					r.logger.Debug("Cache hit", zap.String("cache_key", cacheKey))
+					if r.cacheHitCounter != nil {
+						r.cacheHitCounter.Inc()
+
+						// Update cache hit ratio
+						if r.cacheHitRatio != nil {
+							hits := r.cacheHitCounter.Value()
+							misses := r.cacheMissCounter.Value()
+							total := hits + misses
+							if total > 0 {
+								r.cacheHitRatio.Set(hits / total)
+							}
+						}
+					}
+
+					// Write the cached response
+					w.Write(cachedResponse)
+					return
+				}
+
+				// Log and record metrics for cache miss
+				r.logger.Debug("Cache miss", zap.String("cache_key", cacheKey))
+				if r.cacheMissCounter != nil {
+					r.cacheMissCounter.Inc()
+
+					// Update cache hit ratio
+					if r.cacheHitRatio != nil {
+						hits := r.cacheHitCounter.Value()
+						misses := r.cacheMissCounter.Value()
+						total := hits + misses
+						if total > 0 {
+							r.cacheHitRatio.Set(hits / total)
+						}
+					}
+				}
+			}
+		}
 
 		// Get data based on source type
 		switch route.SourceType {
@@ -350,11 +574,49 @@ func RegisterGenericRoute[Req any, Resp any, UserID comparable, User any](r *Rou
 			return
 		}
 
-		// Encode the response
-		err = route.Codec.Encode(w, resp)
-		if err != nil {
-			r.handleError(w, req, err, http.StatusInternalServerError, "Failed to encode response")
-			return
+		// If caching is enabled and we have a cache key, we need to capture the response
+		if canCache && cacheKey != "" && r.config.CacheSet != nil {
+			// Create a recorder to capture the response
+			recorder := httptest.NewRecorder()
+
+			// Encode the response to the recorder
+			err = route.Codec.Encode(recorder, resp)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusInternalServerError, "Failed to encode response")
+				return
+			}
+
+			// Get the response from the recorder
+			result := recorder.Result()
+			defer result.Body.Close()
+
+			// Read the response body
+			responseBody, err := io.ReadAll(result.Body)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusInternalServerError, "Failed to read response body")
+				return
+			}
+
+			// Cache the response
+			cacheErr := r.config.CacheSet(cacheKey, responseBody)
+			if cacheErr != nil {
+				// Log the error but don't fail the request
+				r.logger.Warn("Failed to cache response",
+					zap.String("cache_key", cacheKey),
+					zap.Error(cacheErr))
+			} else {
+				r.logger.Debug("Response cached", zap.String("cache_key", cacheKey))
+			}
+
+			// Write the response to the original response writer
+			w.Write(responseBody)
+		} else {
+			// Encode the response directly to the response writer
+			err = route.Codec.Encode(w, resp)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusInternalServerError, "Failed to encode response")
+				return
+			}
 		}
 	})
 
