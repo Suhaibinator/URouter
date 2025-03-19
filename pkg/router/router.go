@@ -103,10 +103,10 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 
 		// Use the MetricsConfig
 		if config.MetricsConfig != nil {
-			// Check if the collector is a v2 registry
-			if registry, ok := config.MetricsConfig.Collector.(*metrics.PrometheusRegistry); ok {
-				// Create a middleware using the v2 registry
-				prometheusMiddleware := metrics.NewPrometheusMiddleware(registry, metrics.MetricsMiddlewareConfig{
+			// Check if the collector is a metrics registry
+			if registry, ok := config.MetricsConfig.Collector.(metrics.MetricsRegistry); ok {
+				// Create a middleware using the registry
+				metricsMiddlewareImpl := metrics.NewMetricsMiddleware(registry, metrics.MetricsMiddlewareConfig{
 					EnableLatency:    config.MetricsConfig.EnableLatency,
 					EnableThroughput: config.MetricsConfig.EnableThroughput,
 					EnableQPS:        config.MetricsConfig.EnableQPS,
@@ -117,23 +117,7 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 				})
 				// Create an adapter function that converts the middleware.Handler method to a common.Middleware
 				metricsMiddleware = func(next http.Handler) http.Handler {
-					return prometheusMiddleware.Handler("", next)
-				}
-			} else {
-				// Create a default v2 registry and middleware
-				registry := metrics.NewPrometheusRegistry()
-				prometheusMiddleware := metrics.NewPrometheusMiddleware(registry, metrics.MetricsMiddlewareConfig{
-					EnableLatency:    config.MetricsConfig.EnableLatency,
-					EnableThroughput: config.MetricsConfig.EnableThroughput,
-					EnableQPS:        config.MetricsConfig.EnableQPS,
-					EnableErrors:     config.MetricsConfig.EnableErrors,
-					DefaultTags: metrics.Tags{
-						"service": config.MetricsConfig.Namespace,
-					},
-				})
-				// Create an adapter function that converts the middleware.Handler method to a common.Middleware
-				metricsMiddleware = func(next http.Handler) http.Handler {
-					return prometheusMiddleware.Handler("", next)
+					return metricsMiddlewareImpl.Handler("", next)
 				}
 			}
 		}

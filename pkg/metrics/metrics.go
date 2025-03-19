@@ -1,5 +1,8 @@
-// Package metrics provides an enhanced metrics system for SRouter.
-// It includes a fluent API, first-class tags support, and separation of collection and exposition.
+// Package metrics provides an interface-based metrics system for SRouter.
+// It defines interfaces for metrics collection and exposition, allowing users to provide
+// their own implementations while the framework uses the methods exposed by these interfaces
+// to aggregate metrics. This approach maintains separation of concerns, where the framework
+// defines the interfaces and the users provide the implementations.
 package metrics
 
 import (
@@ -302,4 +305,38 @@ func NewRandomSampler(rate float64) *RandomSampler {
 // Sample returns true if the request should be sampled.
 func (s *RandomSampler) Sample() bool {
 	return s.rate >= 1.0
+}
+
+// MetricsMiddlewareImpl is a concrete implementation of the MetricsMiddleware interface.
+type MetricsMiddlewareImpl struct {
+	registry MetricsRegistry
+	config   MetricsMiddlewareConfig
+	filter   MetricsFilter
+	sampler  MetricsSampler
+}
+
+// NewMetricsMiddleware creates a new MetricsMiddlewareImpl.
+func NewMetricsMiddleware(registry MetricsRegistry, config MetricsMiddlewareConfig) *MetricsMiddlewareImpl {
+	return &MetricsMiddlewareImpl{
+		registry: registry,
+		config:   config,
+	}
+}
+
+// Configure configures the middleware.
+func (m *MetricsMiddlewareImpl) Configure(config MetricsMiddlewareConfig) MetricsMiddleware {
+	m.config = config
+	return m
+}
+
+// WithFilter adds a filter to the middleware.
+func (m *MetricsMiddlewareImpl) WithFilter(filter MetricsFilter) MetricsMiddleware {
+	m.filter = filter
+	return m
+}
+
+// WithSampler adds a sampler to the middleware.
+func (m *MetricsMiddlewareImpl) WithSampler(sampler MetricsSampler) MetricsMiddleware {
+	m.sampler = sampler
+	return m
 }
