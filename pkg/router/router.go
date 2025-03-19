@@ -90,7 +90,10 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 	}
 
 	// Add IP middleware as the first middleware (before any other middleware)
-	// This ensures that the client IP is available in the request context for all other middleware
+	// This ensures that the client IP is available in the request context for all other middleware,
+	// which is especially important for rate limiting by IP address. If IP middleware is not added
+	// or is added after rate limiting middleware, rate limiting by IP will fall back to extracting
+	// the IP from headers or RemoteAddr, which may not be as reliable.
 	ipConfig := config.IPConfig
 	if ipConfig == nil {
 		ipConfig = middleware.DefaultIPConfig()
@@ -321,7 +324,7 @@ func (r *Router[T, U]) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel
 
 	// Add rate limiting middleware if configured
 	if rateLimit != nil {
-		chain = chain.Append(middleware.RateLimit[T, U](rateLimit, r.rateLimiter, r.logger))
+		chain = chain.Append(middleware.RateLimit(rateLimit, r.rateLimiter, r.logger))
 	}
 
 	// Add authentication middleware based on the auth level

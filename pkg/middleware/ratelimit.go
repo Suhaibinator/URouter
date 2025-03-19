@@ -94,10 +94,19 @@ func (u *UberRateLimiter) Allow(key string, limit int, window time.Duration) (bo
 
 // extractIP extracts the client IP address from the request context
 // If the IP is not in the context, it falls back to the old method
-func extractIP(r *http.Request) string {
+func extractIP(r *http.Request, logger *zap.Logger) string {
 	// Try to get the IP from the context first (set by ClientIPMiddleware)
 	if ip := ClientIP(r); ip != "" {
 		return ip
+	}
+
+	// Log a warning that we're using the fallback mechanism
+	if logger != nil {
+		logger.Warn("IP middleware not properly configured or applied before rate limiting",
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.String("remote_addr", r.RemoteAddr),
+		)
 	}
 
 	// Fall back to the old method for backward compatibility
@@ -237,12 +246,12 @@ func RateLimit[T comparable, U any](config *RateLimitConfig[T, U], limiter RateL
 
 			switch config.Strategy {
 			case StrategyIP:
-				key = extractIP(r)
+				key = extractIP(r, logger)
 			case StrategyUser:
 				key = extractUser(r, config)
 				// If no user is found and strategy is user, fall back to IP
 				if key == "" {
-					key = extractIP(r)
+					key = extractIP(r, logger)
 				}
 			case StrategyCustom:
 				if config.KeyExtractor != nil {
@@ -258,10 +267,10 @@ func RateLimit[T comparable, U any](config *RateLimitConfig[T, U], limiter RateL
 					}
 				} else {
 					// If no key extractor is provided, fall back to IP
-					key = extractIP(r)
+					key = extractIP(r, logger)
 				}
 			default:
-				key = extractIP(r)
+				key = extractIP(r, logger)
 			}
 
 			// Combine bucket name and key to create a unique identifier
