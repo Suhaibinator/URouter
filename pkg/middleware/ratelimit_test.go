@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestUberRateLimiter(t *testing.T) {
@@ -66,10 +67,13 @@ func TestUberRateLimiter(t *testing.T) {
 }
 
 func TestRateLimitExtractIP(t *testing.T) {
+	// Create a nil logger for testing
+	var logger *zap.Logger = nil
+
 	// Test with X-Forwarded-For header
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Forwarded-For", "192.168.1.1, 10.0.0.1")
-	ip := extractIP(req)
+	ip := extractIP(req, logger)
 	if ip != "192.168.1.1" {
 		t.Errorf("Expected IP to be 192.168.1.1, got %s", ip)
 	}
@@ -77,7 +81,7 @@ func TestRateLimitExtractIP(t *testing.T) {
 	// Test with X-Real-IP header
 	req = httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Real-IP", "192.168.1.2")
-	ip = extractIP(req)
+	ip = extractIP(req, logger)
 	if ip != "192.168.1.2" {
 		t.Errorf("Expected IP to be 192.168.1.2, got %s", ip)
 	}
@@ -85,7 +89,7 @@ func TestRateLimitExtractIP(t *testing.T) {
 	// Test with RemoteAddr
 	req = httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "192.168.1.3:1234"
-	ip = extractIP(req)
+	ip = extractIP(req, logger)
 	if ip != "192.168.1.3:1234" {
 		t.Errorf("Expected IP to be 192.168.1.3:1234, got %s", ip)
 	}
@@ -421,5 +425,105 @@ func TestCreateRateLimitMiddleware(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+}
+
+// TestRateLimitWithIPMiddleware tests that rate limiting by IP works correctly
+// when the IP middleware is applied before the rate limiting middleware
+func TestRateLimitWithIPMiddleware(t *testing.T) {
+	// Create a logger with a test observer to capture logs
+	core, observed := observer.New(zap.WarnLevel)
+	logger := zap.New(core)
+
+	// Create a mock rate limiter
+	mockLimiter := &TestRateLimiter{}
+
+	// Create a rate limit config with IP strategy
+	config := &RateLimitConfig[string, any]{
+		BucketName: "test-bucket-ip",
+		Limit:      2, // Set a low limit for testing
+		Window:     time.Second,
+		Strategy:   StrategyIP,
+	}
+
+	// Create the rate limit middleware
+	rateLimitMiddleware := RateLimit(config, mockLimiter, logger)
+
+	// Create a test handler that returns 200 OK
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Create a chain of middleware with IP middleware first, then rate limiting
+	ipConfig := DefaultIPConfig()
+	ipMiddleware := ClientIPMiddleware(ipConfig)
+
+	// Apply the middleware chain: IP middleware -> Rate limit middleware -> Handler
+	handler := ipMiddleware(rateLimitMiddleware(testHandler))
+
+	// Create a test server
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Make requests to test rate limiting
+	client := &http.Client{}
+
+	// First request should succeed
+	resp, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	// Second request should succeed
+	resp, err = client.Get(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	// Third request should fail with 429 Too Many Requests
+	resp, err = client.Get(server.URL)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Errorf("Expected status code %d, got %d", http.StatusTooManyRequests, resp.StatusCode)
+	}
+
+	// Verify that no warning logs were generated about IP middleware not being configured
+	logs := observed.All()
+	for _, log := range logs {
+		if log.Message == "IP middleware not properly configured or applied before rate limiting" {
+			t.Errorf("Unexpected warning log: %s", log.Message)
+		}
+	}
+
+	// Now test without IP middleware to verify the warning is logged
+	// Create a new test server with only rate limiting middleware
+	serverWithoutIP := httptest.NewServer(rateLimitMiddleware(testHandler))
+	defer serverWithoutIP.Close()
+
+	// Make a request
+	_, err = client.Get(serverWithoutIP.URL)
+	if err != nil {
+		t.Fatalf("Failed to make request: %v", err)
+	}
+
+	// Verify that a warning log was generated about IP middleware not being configured
+	logs = observed.All()
+	found := false
+	for _, log := range logs {
+		if log.Message == "IP middleware not properly configured or applied before rate limiting" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected warning log about IP middleware not being configured")
 	}
 }

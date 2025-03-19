@@ -231,13 +231,13 @@ func TestGenericRouteDecodeError(t *testing.T) {
 	// Check that the log contains the expected message
 	found := false
 	for _, log := range logEntries {
-		if log.Message == "Failed to decode request" {
+		if log.Message == "Failed to decode request body" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("Expected 'Failed to decode request' log message")
+		t.Errorf("Expected 'Failed to decode request body' log message")
 	}
 }
 
@@ -566,4 +566,168 @@ func TestLoggingMiddlewareWithFlusher(t *testing.T) {
 
 	// Note: We can't directly verify that Flush was called since httptest.ResponseRecorder
 	// doesn't track flush calls. In a real test with a custom ResponseWriter, we would check this.
+}
+
+// TestCacheKeyPrefixHierarchy tests the cache key prefix hierarchy
+func TestCacheKeyPrefixHierarchy(t *testing.T) {
+	// Create a router with a global cache key prefix and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
+		CacheKeyPrefix: "global",
+	},
+		// Mock auth function that always returns invalid
+		func(ctx context.Context, token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
+
+	// Test with only global prefix
+	prefix := r.getEffectiveCacheKeyPrefix("", "")
+	if prefix != "global" {
+		t.Errorf("Expected prefix %q, got %q", "global", prefix)
+	}
+
+	// Test with sub-router prefix
+	prefix = r.getEffectiveCacheKeyPrefix("", "subrouter")
+	if prefix != "subrouter" {
+		t.Errorf("Expected prefix %q, got %q", "subrouter", prefix)
+	}
+
+	// Test with route-specific prefix
+	prefix = r.getEffectiveCacheKeyPrefix("route", "")
+	if prefix != "route" {
+		t.Errorf("Expected prefix %q, got %q", "route", prefix)
+	}
+
+	// Test with both sub-router and route-specific prefixes (route-specific should take precedence)
+	prefix = r.getEffectiveCacheKeyPrefix("route", "subrouter")
+	if prefix != "route" {
+		t.Errorf("Expected prefix %q, got %q", "route", prefix)
+	}
+
+	// Test with empty global prefix
+	r = NewRouter[string, string](RouterConfig{},
+		// Mock auth function that always returns invalid
+		func(ctx context.Context, token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
+
+	// Test with no prefixes
+	prefix = r.getEffectiveCacheKeyPrefix("", "")
+	if prefix != "" {
+		t.Errorf("Expected empty prefix, got %q", prefix)
+	}
+
+	// Test with only sub-router prefix
+	prefix = r.getEffectiveCacheKeyPrefix("", "subrouter")
+	if prefix != "subrouter" {
+		t.Errorf("Expected prefix %q, got %q", "subrouter", prefix)
+	}
+
+	// Test with only route-specific prefix
+	prefix = r.getEffectiveCacheKeyPrefix("route", "")
+	if prefix != "route" {
+		t.Errorf("Expected prefix %q, got %q", "route", prefix)
+	}
+}
+
+// TestSubRouterCaching tests that the sub-router's CacheKeyPrefix is used when caching responses
+func TestSubRouterCaching(t *testing.T) {
+	// Create a mock cache
+	cache := make(map[string][]byte)
+	cacheGet := func(key string) ([]byte, bool) {
+		value, found := cache[key]
+		return value, found
+	}
+	cacheSet := func(key string, value []byte) error {
+		cache[key] = value
+		return nil
+	}
+
+	// Create a router with caching enabled and string as both the user ID and user type
+	r := NewRouter[string, string](RouterConfig{
+		CacheGet:       cacheGet,
+		CacheSet:       cacheSet,
+		CacheKeyPrefix: "global",
+		SubRouters: []SubRouterConfig{
+			{
+				PathPrefix:     "/api/v1",
+				CacheResponse:  true,
+				CacheKeyPrefix: "api-v1",
+				Routes: []RouteConfigBase{
+					{
+						Path:    "/users/:id",
+						Methods: []string{"GET"},
+						Handler: func(w http.ResponseWriter, r *http.Request) {
+							id := GetParam(r, "id")
+							w.Header().Set("Content-Type", "application/json")
+							_, _ = w.Write([]byte(`{"id":"` + id + `","name":"User ` + id + `"}`))
+						},
+					},
+				},
+			},
+			{
+				PathPrefix:    "/api/v2",
+				CacheResponse: true,
+				// No CacheKeyPrefix, will use global prefix
+				Routes: []RouteConfigBase{
+					{
+						Path:    "/users/:id",
+						Methods: []string{"GET"},
+						Handler: func(w http.ResponseWriter, r *http.Request) {
+							id := GetParam(r, "id")
+							w.Header().Set("Content-Type", "application/json")
+							_, _ = w.Write([]byte(`{"id":"` + id + `","name":"User ` + id + `"}`))
+						},
+					},
+				},
+			},
+		},
+	},
+		// Mock auth function that always returns invalid
+		func(ctx context.Context, token string) (string, bool) {
+			return "", false
+		},
+		// Mock user ID function that returns the string itself
+		func(user string) string {
+			return user
+		})
+
+	// Test sub-router with custom prefix
+	req, _ := http.NewRequest("GET", "/api/v1/users/123", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check that the response was cached with the sub-router prefix
+	expectedKey := "api-v1:/api/v1/users/123"
+	if _, found := cache[expectedKey]; !found {
+		t.Errorf("Expected response to be cached with key %q", expectedKey)
+	}
+
+	// Test sub-router with global prefix
+	req, _ = http.NewRequest("GET", "/api/v2/users/456", nil)
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	// Check that the response was cached with the global prefix
+	expectedKey = "global:/api/v2/users/456"
+	if _, found := cache[expectedKey]; !found {
+		t.Errorf("Expected response to be cached with key %q", expectedKey)
+	}
 }

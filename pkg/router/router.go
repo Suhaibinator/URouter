@@ -4,13 +4,17 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Suhaibinator/SRouter/pkg/codec"
 	"github.com/Suhaibinator/SRouter/pkg/common"
 	"github.com/Suhaibinator/SRouter/pkg/metrics"
 	"github.com/Suhaibinator/SRouter/pkg/middleware"
@@ -32,6 +36,9 @@ type Router[T comparable, U any] struct {
 	shutdown          bool
 	shutdownMu        sync.RWMutex
 	metricsWriterPool sync.Pool // Pool for reusing metricsResponseWriter objects
+	cacheHitCounter   metrics.Counter
+	cacheMissCounter  metrics.Counter
+	cacheHitRatio     metrics.Gauge
 }
 
 // contextKey is a type for context keys.
@@ -90,7 +97,10 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 	}
 
 	// Add IP middleware as the first middleware (before any other middleware)
-	// This ensures that the client IP is available in the request context for all other middleware
+	// This ensures that the client IP is available in the request context for all other middleware,
+	// which is especially important for rate limiting by IP address. If IP middleware is not added
+	// or is added after rate limiting middleware, rate limiting by IP will fall back to extracting
+	// the IP from headers or RemoteAddr, which may not be as reliable.
 	ipConfig := config.IPConfig
 	if ipConfig == nil {
 		ipConfig = middleware.DefaultIPConfig()
@@ -119,6 +129,25 @@ func NewRouter[T comparable, U any](config RouterConfig, authFunction func(conte
 				metricsMiddleware = func(next http.Handler) http.Handler {
 					return metricsMiddlewareImpl.Handler("", next)
 				}
+
+				// Initialize cache metrics
+				r.cacheHitCounter = registry.NewCounter().
+					Name("cache_hits_total").
+					Description("Total number of cache hits").
+					Tag("service", config.MetricsConfig.Namespace).
+					Build()
+
+				r.cacheMissCounter = registry.NewCounter().
+					Name("cache_misses_total").
+					Description("Total number of cache misses").
+					Tag("service", config.MetricsConfig.Namespace).
+					Build()
+
+				r.cacheHitRatio = registry.NewGauge().
+					Name("cache_hit_ratio").
+					Description("Ratio of cache hits to total cache lookups").
+					Tag("service", config.MetricsConfig.Namespace).
+					Build()
 			}
 		}
 
@@ -150,11 +179,128 @@ func (r *Router[T, U]) registerSubRouter(sr SubRouterConfig) {
 		// Create a handler with all middlewares applied
 		handler := r.wrapHandler(route.Handler, route.AuthLevel, timeout, maxBodySize, rateLimit, append(sr.Middlewares, route.Middlewares...))
 
+		// If caching is enabled for the sub-router, wrap the handler with a caching handler
+		if sr.CacheResponse && r.config.CacheGet != nil && r.config.CacheSet != nil {
+			// Get the effective cache key prefix
+			cacheKeyPrefix := r.getEffectiveCacheKeyPrefix("", sr.CacheKeyPrefix)
+
+			// Create a caching handler
+			originalHandler := handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				// Only cache GET requests
+				if req.Method != "GET" {
+					originalHandler.ServeHTTP(w, req)
+					return
+				}
+
+				// Create a cache key from the request path and query
+				cacheKey := req.URL.Path
+				if req.URL.RawQuery != "" {
+					cacheKey += "?" + req.URL.RawQuery
+				}
+
+				// Add the prefix if available
+				if cacheKeyPrefix != "" {
+					cacheKey = cacheKeyPrefix + ":" + cacheKey
+				}
+
+				// Try to get from cache
+				if cachedResponse, found := r.config.CacheGet(cacheKey); found {
+					// Log and record metrics for cache hit
+					r.logger.Debug("Cache hit", zap.String("cache_key", cacheKey))
+					if r.cacheHitCounter != nil {
+						r.cacheHitCounter.Inc()
+
+						// Update cache hit ratio
+						if r.cacheHitRatio != nil {
+							hits := r.cacheHitCounter.Value()
+							misses := r.cacheMissCounter.Value()
+							total := hits + misses
+							if total > 0 {
+								r.cacheHitRatio.Set(hits / total)
+							}
+						}
+					}
+
+					// Write the cached response
+					_, _ = w.Write(cachedResponse)
+					return
+				}
+
+				// Log and record metrics for cache miss
+				r.logger.Debug("Cache miss", zap.String("cache_key", cacheKey))
+				if r.cacheMissCounter != nil {
+					r.cacheMissCounter.Inc()
+
+					// Update cache hit ratio
+					if r.cacheHitRatio != nil {
+						hits := r.cacheHitCounter.Value()
+						misses := r.cacheMissCounter.Value()
+						total := hits + misses
+						if total > 0 {
+							r.cacheHitRatio.Set(hits / total)
+						}
+					}
+				}
+
+				// Create a recorder to capture the response
+				recorder := httptest.NewRecorder()
+
+				// Call the original handler with the recorder
+				originalHandler.ServeHTTP(recorder, req)
+
+				// Get the response from the recorder
+				result := recorder.Result()
+				defer result.Body.Close()
+
+				// Read the response body
+				responseBody, err := io.ReadAll(result.Body)
+				if err != nil {
+					r.handleError(w, req, err, http.StatusInternalServerError, "Failed to read response body")
+					return
+				}
+
+				// Cache the response
+				cacheErr := r.config.CacheSet(cacheKey, responseBody)
+				if cacheErr != nil {
+					// Log the error but don't fail the request
+					r.logger.Warn("Failed to cache response",
+						zap.String("cache_key", cacheKey),
+						zap.Error(cacheErr))
+				} else {
+					r.logger.Debug("Response cached", zap.String("cache_key", cacheKey))
+				}
+
+				// Copy the headers from the recorder to the response writer
+				for k, v := range recorder.Header() {
+					w.Header()[k] = v
+				}
+
+				// Write the status code
+				w.WriteHeader(recorder.Code)
+
+				// Write the response body
+				_, _ = w.Write(responseBody)
+			})
+		}
+
 		// Register the route with httprouter
 		for _, method := range route.Methods {
 			r.router.Handle(method, fullPath, r.convertToHTTPRouterHandle(handler))
 		}
 	}
+}
+
+// getEffectiveCacheKeyPrefix returns the effective cache key prefix for a route.
+// It considers route-specific, sub-router, and global cache key prefix settings in that order of precedence.
+func (r *Router[T, U]) getEffectiveCacheKeyPrefix(routePrefix, subRouterPrefix string) string {
+	if routePrefix != "" {
+		return routePrefix
+	}
+	if subRouterPrefix != "" {
+		return subRouterPrefix
+	}
+	return r.config.CacheKeyPrefix
 }
 
 // RegisterRoute registers a route with the router.
@@ -187,10 +333,237 @@ func RegisterGenericRoute[Req any, Resp any, UserID comparable, User any](r *Rou
 
 	// Create a handler that uses the codec to decode the request and encode the response
 	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// Decode the request
-		data, err := route.Codec.Decode(req)
-		if err != nil {
-			r.handleError(w, req, err, http.StatusBadRequest, "Failed to decode request")
+		var data Req
+		var err error
+		var encodedData string
+		var cacheKey string
+		var canCache bool
+
+		// Check if caching is enabled for this route
+		if route.CacheResponse && r.config.CacheGet != nil && r.config.CacheSet != nil {
+			// Caching is only supported for query and path parameter source types
+			canCache = route.SourceType == Base64QueryParameter ||
+				route.SourceType == Base62QueryParameter ||
+				route.SourceType == Base64PathParameter ||
+				route.SourceType == Base62PathParameter
+		}
+
+		// Try to get from cache if caching is enabled
+		if canCache {
+			// Get the encoded value based on source type
+			switch route.SourceType {
+			case Base64QueryParameter, Base62QueryParameter:
+				encodedData = req.URL.Query().Get(route.SourceKey)
+			case Base64PathParameter, Base62PathParameter:
+				paramName := route.SourceKey
+				if paramName == "" {
+					// If no specific parameter name is provided, use the first path parameter
+					params := GetParams(req)
+					if len(params) > 0 {
+						encodedData = params[0].Value
+					}
+				} else {
+					encodedData = GetParam(req, paramName)
+				}
+			}
+
+			// Use the encoded value as the cache key with prefix
+			if encodedData != "" {
+				// Apply cache key prefix if available
+				prefix := r.getEffectiveCacheKeyPrefix(route.CacheKeyPrefix, "")
+
+				if prefix != "" {
+					cacheKey = prefix + ":" + encodedData
+				} else {
+					cacheKey = encodedData
+				}
+
+				// Try to get from cache
+				if cachedResponse, found := r.config.CacheGet(cacheKey); found {
+					// Log and record metrics for cache hit
+					r.logger.Debug("Cache hit", zap.String("cache_key", cacheKey))
+					if r.cacheHitCounter != nil {
+						r.cacheHitCounter.Inc()
+
+						// Update cache hit ratio
+						if r.cacheHitRatio != nil {
+							hits := r.cacheHitCounter.Value()
+							misses := r.cacheMissCounter.Value()
+							total := hits + misses
+							if total > 0 {
+								r.cacheHitRatio.Set(hits / total)
+							}
+						}
+					}
+
+					// Write the cached response
+					_, _ = w.Write(cachedResponse)
+					return
+				}
+
+				// Log and record metrics for cache miss
+				r.logger.Debug("Cache miss", zap.String("cache_key", cacheKey))
+				if r.cacheMissCounter != nil {
+					r.cacheMissCounter.Inc()
+
+					// Update cache hit ratio
+					if r.cacheHitRatio != nil {
+						hits := r.cacheHitCounter.Value()
+						misses := r.cacheMissCounter.Value()
+						total := hits + misses
+						if total > 0 {
+							r.cacheHitRatio.Set(hits / total)
+						}
+					}
+				}
+			}
+		}
+
+		// Get data based on source type
+		switch route.SourceType {
+		case Body: // Default is Body (0)
+			// Use the codec's Decode method directly for body data
+			data, err = route.Codec.Decode(req)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest, "Failed to decode request body")
+				return
+			}
+
+		case Base64QueryParameter:
+			// Get from query parameter and decode base64
+			encodedData := req.URL.Query().Get(route.SourceKey)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing query parameter"),
+					http.StatusBadRequest, "Missing required query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Decode from base64
+			decodedData, err := codec.DecodeBase64(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base64 query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded query parameter data")
+				return
+			}
+			data = reqData
+
+		case Base62QueryParameter:
+			// Get from query parameter and decode base62
+			encodedData := req.URL.Query().Get(route.SourceKey)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing query parameter"),
+					http.StatusBadRequest, "Missing required query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Decode from base62
+			decodedData, err := codec.DecodeBase62(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base62 query parameter: "+route.SourceKey)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded query parameter data")
+				return
+			}
+			data = reqData
+
+		case Base64PathParameter:
+			// Get from path parameter and decode base64
+			paramName := route.SourceKey
+			if paramName == "" {
+				// If no specific parameter name is provided, use the first path parameter
+				params := GetParams(req)
+				if len(params) == 0 {
+					r.handleError(w, req, errors.New("no path parameters found"),
+						http.StatusBadRequest, "No path parameters found")
+					return
+				}
+				paramName = params[0].Key
+			}
+
+			encodedData := GetParam(req, paramName)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing path parameter"),
+					http.StatusBadRequest, "Missing required path parameter: "+paramName)
+				return
+			}
+
+			// Decode from base64
+			decodedData, err := codec.DecodeBase64(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base64 path parameter: "+paramName)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded path parameter data")
+				return
+			}
+			data = reqData
+
+		case Base62PathParameter:
+			// Get from path parameter and decode base62
+			paramName := route.SourceKey
+			if paramName == "" {
+				// If no specific parameter name is provided, use the first path parameter
+				params := GetParams(req)
+				if len(params) == 0 {
+					r.handleError(w, req, errors.New("no path parameters found"),
+						http.StatusBadRequest, "No path parameters found")
+					return
+				}
+				paramName = params[0].Key
+			}
+
+			encodedData := GetParam(req, paramName)
+			if encodedData == "" {
+				r.handleError(w, req, errors.New("missing path parameter"),
+					http.StatusBadRequest, "Missing required path parameter: "+paramName)
+				return
+			}
+
+			// Decode from base62
+			decodedData, err := codec.DecodeBase62(encodedData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to decode base62 path parameter: "+paramName)
+				return
+			}
+
+			// Unmarshal the decoded data
+			var reqData Req
+			err = json.Unmarshal(decodedData, &reqData)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusBadRequest,
+					"Failed to unmarshal decoded path parameter data")
+				return
+			}
+			data = reqData
+
+		default:
+			r.handleError(w, req, errors.New("unsupported source type"),
+				http.StatusInternalServerError, "Unsupported source type")
 			return
 		}
 
@@ -201,11 +574,49 @@ func RegisterGenericRoute[Req any, Resp any, UserID comparable, User any](r *Rou
 			return
 		}
 
-		// Encode the response
-		err = route.Codec.Encode(w, resp)
-		if err != nil {
-			r.handleError(w, req, err, http.StatusInternalServerError, "Failed to encode response")
-			return
+		// If caching is enabled and we have a cache key, we need to capture the response
+		if canCache && cacheKey != "" && r.config.CacheSet != nil {
+			// Create a recorder to capture the response
+			recorder := httptest.NewRecorder()
+
+			// Encode the response to the recorder
+			err = route.Codec.Encode(recorder, resp)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusInternalServerError, "Failed to encode response")
+				return
+			}
+
+			// Get the response from the recorder
+			result := recorder.Result()
+			defer result.Body.Close()
+
+			// Read the response body
+			responseBody, err := io.ReadAll(result.Body)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusInternalServerError, "Failed to read response body")
+				return
+			}
+
+			// Cache the response
+			cacheErr := r.config.CacheSet(cacheKey, responseBody)
+			if cacheErr != nil {
+				// Log the error but don't fail the request
+				r.logger.Warn("Failed to cache response",
+					zap.String("cache_key", cacheKey),
+					zap.Error(cacheErr))
+			} else {
+				r.logger.Debug("Response cached", zap.String("cache_key", cacheKey))
+			}
+
+			// Write the response to the original response writer
+			_, _ = w.Write(responseBody)
+		} else {
+			// Encode the response directly to the response writer
+			err = route.Codec.Encode(w, resp)
+			if err != nil {
+				r.handleError(w, req, err, http.StatusInternalServerError, "Failed to encode response")
+				return
+			}
 		}
 	})
 
@@ -321,7 +732,7 @@ func (r *Router[T, U]) wrapHandler(handler http.HandlerFunc, authLevel AuthLevel
 
 	// Add rate limiting middleware if configured
 	if rateLimit != nil {
-		chain = chain.Append(middleware.RateLimit[T, U](rateLimit, r.rateLimiter, r.logger))
+		chain = chain.Append(middleware.RateLimit(rateLimit, r.rateLimiter, r.logger))
 	}
 
 	// Add authentication middleware based on the auth level
