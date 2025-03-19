@@ -40,7 +40,7 @@ func TestRegisterSubRouterWithCaching(t *testing.T) {
 
 	// Create a handler that returns a simple response
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 	})
 
 	// Create a sub-router with caching enabled
@@ -126,7 +126,7 @@ func TestRegisterSubRouterWithCachingNonGetMethod(t *testing.T) {
 
 	// Create a handler that returns a simple response
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 	})
 
 	// Create a sub-router with caching enabled
@@ -195,7 +195,7 @@ func TestRegisterSubRouterWithCachingError(t *testing.T) {
 
 	// Create a handler that returns a simple response
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 	})
 
 	// Create a sub-router with caching enabled
