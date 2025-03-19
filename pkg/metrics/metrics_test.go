@@ -977,7 +977,7 @@ func TestMetricsMiddlewareImpl_Handler_Error(t *testing.T) {
 	// Create a test handler that returns an error
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	})
 
 	// Wrap the handler with the middleware
