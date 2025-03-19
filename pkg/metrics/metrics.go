@@ -303,3 +303,37 @@ func NewRandomSampler(rate float64) *RandomSampler {
 func (s *RandomSampler) Sample() bool {
 	return s.rate >= 1.0
 }
+
+// MetricsMiddlewareImpl is a concrete implementation of the MetricsMiddleware interface.
+type MetricsMiddlewareImpl struct {
+	registry MetricsRegistry
+	config   MetricsMiddlewareConfig
+	filter   MetricsFilter
+	sampler  MetricsSampler
+}
+
+// NewMetricsMiddleware creates a new MetricsMiddlewareImpl.
+func NewMetricsMiddleware(registry MetricsRegistry, config MetricsMiddlewareConfig) *MetricsMiddlewareImpl {
+	return &MetricsMiddlewareImpl{
+		registry: registry,
+		config:   config,
+	}
+}
+
+// Configure configures the middleware.
+func (m *MetricsMiddlewareImpl) Configure(config MetricsMiddlewareConfig) MetricsMiddleware {
+	m.config = config
+	return m
+}
+
+// WithFilter adds a filter to the middleware.
+func (m *MetricsMiddlewareImpl) WithFilter(filter MetricsFilter) MetricsMiddleware {
+	m.filter = filter
+	return m
+}
+
+// WithSampler adds a sampler to the middleware.
+func (m *MetricsMiddlewareImpl) WithSampler(sampler MetricsSampler) MetricsMiddleware {
+	m.sampler = sampler
+	return m
+}

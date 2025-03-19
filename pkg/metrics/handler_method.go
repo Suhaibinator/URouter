@@ -6,7 +6,7 @@ import (
 )
 
 // Handler wraps an HTTP handler with metrics collection.
-func (m *PrometheusMiddleware) Handler(name string, handler http.Handler) http.Handler {
+func (m *MetricsMiddlewareImpl) Handler(name string, handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if we should collect metrics for this request
 		if m.filter != nil && !m.filter.Filter(r) {
@@ -96,23 +96,4 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(statusCode int) {
 	rw.statusCode = statusCode
 	rw.ResponseWriter.WriteHeader(statusCode)
-}
-
-// WithFilter sets the filter for the middleware.
-func (m *PrometheusMiddleware) WithFilter(filter MetricsFilter) *PrometheusMiddleware {
-	m.filter = filter
-	return m
-}
-
-// WithSampler sets the sampler for the middleware.
-func (m *PrometheusMiddleware) WithSampler(sampler MetricsSampler) *PrometheusMiddleware {
-	m.sampler = sampler
-	return m
-}
-
-// Configure updates the middleware configuration.
-func (m *PrometheusMiddleware) Configure(config MetricsMiddlewareConfig) *PrometheusMiddleware {
-	m.config = config
-	m.sampler = NewRandomSampler(config.SamplingRate)
-	return m
 }
